@@ -1,0 +1,38 @@
+# ── OS ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editor ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Python (Server + Client) ────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# ── Environment / secrets ────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Next.js (web) ────────────────────────────────────────
+web/node_modules/
+web/.next/
+web/out/
+
+# ── Logs ─────────────────────────────────────────────────
+*.log
+crash.log

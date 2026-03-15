@@ -1,0 +1,50 @@
+import { cookies } from "next/headers";
+import { notFound, redirect } from "next/navigation";
+import PaperBuilder from "@/components/papers/PaperBuilder";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export default async function PaperDetailPage({
+  params,
+}: {
+  params: Promise<{ paperId: string }>;
+}) {
+  const { paperId } = await params;
+  const token = (await cookies()).get("wfl-session")?.value;
+  if (!token) redirect("/login");
+
+  const res = await fetch(`${API}/paper/${paperId}`, {
+    headers: { "x-session-token": token },
+    cache: "no-store",
+  }).catch(() => null);
+
+  if (!res) {
+    return (
+      <div className="flex items-center justify-center h-full text-sm text-zinc-500">
+        Could not reach the server.
+      </div>
+    );
+  }
+
+  if (res.status === 404) notFound();
+  if (!res.ok) redirect("/papers");
+
+  const data = await res.json();
+
+  const q = data.questions ?? {};
+  const meta = q.meta ?? {};
+
+  const initialData = {
+    examName: meta.exam_name ?? "",
+    sections: q.sections ?? [],
+    answers: data.answers ?? {},
+  };
+
+  return (
+    <PaperBuilder
+      paperId={data.id}
+      initialData={initialData}
+      inUse={data.in_use ?? false}
+    />
+  );
+}

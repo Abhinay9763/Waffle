@@ -1,0 +1,4 @@
+PyQt6
+httpx
+pandas
+pyinstaller

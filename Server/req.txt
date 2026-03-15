@@ -1,0 +1,6 @@
+fastapi[standard]
+supabase
+pydantic
+dotenv
+bcrypt
+itsdangerous

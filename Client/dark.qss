@@ -1,0 +1,501 @@
+/* Dark theme — matches Waffle web palette */
+
+/* ── Base ─────────────────────────────────────────────── */
+QWidget#MainBackground {
+    background-color: #09090b;
+}
+
+QWidget {
+    background-color: #09090b;
+    color: #e4e4e7;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 14px;
+}
+
+QLabel {
+    background-color: transparent;
+}
+
+/* ── Exam layout panels ───────────────────────────────── */
+QWidget#TopBar {
+    background-color: #0f0f0f;
+    border-bottom: 1px solid #27272a;
+    min-height: 54px;
+    max-height: 54px;
+}
+
+QWidget#BottomBar {
+    background-color: #0f0f0f;
+    border-top: 1px solid #27272a;
+    min-height: 54px;
+    max-height: 54px;
+}
+
+QWidget#NavPanel {
+    background-color: #111113;
+    border-radius: 10px;
+    border: 1px solid #27272a;
+}
+
+QWidget#QuestionPanel {
+    background-color: #111113;
+    border-radius: 10px;
+    border: 1px solid #27272a;
+    padding: 24px 28px;
+}
+
+QWidget#LegendPanel {
+    background-color: #111113;
+    border-radius: 10px;
+    border: 1px solid #27272a;
+    padding: 10px 14px;
+}
+
+/* ── Top bar ──────────────────────────────────────────── */
+QLabel#ExamTitle {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f4f4f5;
+    letter-spacing: 0.3px;
+}
+
+QLabel#StudentInfo {
+    font-size: 13px;
+    color: #71717a;
+    font-weight: 500;
+}
+
+QLabel#AutosaveLabel {
+    font-size: 12px;
+    color: #16a34a;
+    padding-right: 16px;
+}
+
+QLabel#TimerLabel {
+    font-size: 26px;
+    font-weight: 700;
+    color: #facc15;
+    letter-spacing: 3px;
+    min-width: 160px;
+}
+
+/* Timer goes red under 5 minutes */
+QLabel#TimerLabel[lowtime="true"] {
+    color: #ef4444;
+}
+
+/* ── Question area ────────────────────────────────────── */
+QLabel#QuestionText {
+    font-size: 35px;
+    font-weight: 500;
+    color: #f4f4f5;
+    line-height: 1.5;
+    padding-bottom: 6px;
+}
+
+QPushButton#OptionButton {
+    font-size: 25px;
+    padding: 14px 20px;
+    text-align: left;
+    border-radius: 8px;
+    border: 1px solid #27272a;
+    background-color: #18181b;
+}
+
+QPushButton#OptionButton:hover {
+    background-color: #1f1f23;
+    border-color: #3f3f46;
+}
+
+/* ── Nav panel ────────────────────────────────────────── */
+QLabel#NavSectionLabel {
+    font-size: 11px;
+    font-weight: 600;
+    color: #52525b;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 6px 0 2px 0;
+}
+
+QLabel#LegendLabel {
+    font-size: 13px;
+}
+
+/* ── Buttons — base ───────────────────────────────────── */
+QPushButton {
+    background-color: #18181b;
+    color: #e4e4e7;
+    border-radius: 8px;
+    padding: 8px 14px;
+    border: 1px solid #3f3f46;
+}
+
+QPushButton:hover {
+    background-color: #27272a;
+    border-color: #52525b;
+}
+
+QPushButton:pressed {
+    background-color: #3f3f46;
+}
+
+/* ── Bottom bar navigation ────────────────────────────── */
+QPushButton#BackButton {
+    min-width: 80px;
+    max-width: 80px;
+    padding: 8px 10px;
+    background-color: #111113;
+    border-color: #3f3f46;
+}
+
+QPushButton#BackButton:hover {
+    background-color: #1f1f23;
+}
+
+QPushButton#ClearButton {
+    min-width: 80px;
+    max-width: 80px;
+    padding: 8px 10px;
+}
+
+QPushButton#ClearButton:hover {
+    background-color: #27272a;
+}
+
+QPushButton#NextButton {
+    min-width: 88px;
+    max-width: 88px;
+    padding: 8px 10px;
+    background-color: #ca8a04;
+    border-color: #a16207;
+    color: #09090b;
+    font-weight: 700;
+}
+
+QPushButton#NextButton:hover {
+    background-color: #eab308;
+}
+
+QPushButton#SubmitButton {
+    min-width: 88px;
+    max-width: 88px;
+    padding: 8px 10px;
+    background-color: #15803d;
+    border-color: #166534;
+    color: #f0fdf4;
+    font-weight: 700;
+}
+
+QPushButton#SubmitButton:hover {
+    background-color: #16a34a;
+}
+
+QPushButton#SubmitButton:disabled {
+    background-color: #14532d;
+    border-color: #14532d;
+    color: #052e16;
+}
+
+/* ── Mark for Review ──────────────────────────────────── */
+QPushButton#MarkForReview {
+    min-width: 140px;
+    padding: 8px 16px;
+}
+
+QPushButton#MarkForReview:checked {
+    background-color: #78350f;
+    border-color: #d97706;
+    color: #fef3c7;
+    font-weight: 600;
+}
+
+QPushButton#MarkForReview:checked:hover {
+    background-color: #92400e;
+}
+
+/* ── Current question in nav grid ────────────────────── */
+QPushButton[current="true"] {
+    background-color: #27272a;
+    border-color: #52525b;
+}
+
+/* ── Scroll areas ─────────────────────────────────────── */
+QScrollArea {
+    border-radius: 10px;
+    border: 1px solid #27272a;
+    background-color: #09090b;
+}
+
+/* ── Scrollbars ───────────────────────────────────────── */
+QScrollBar:vertical {
+    background: transparent;
+    width: 6px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #3f3f46;
+    border-radius: 3px;
+    min-height: 24px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #52525b;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    height: 0;
+}
+
+/* ── Login ────────────────────────────────────────────── */
+
+QWidget#LoginCard {
+    background-color: #111113;
+    border-radius: 14px;
+    border: 1px solid #27272a;
+}
+
+QLabel#LoginTitle {
+    font-size: 24px;
+    font-weight: 700;
+    color: #f4f4f5;
+    letter-spacing: 0.2px;
+}
+
+QLabel#LoginSubtitle {
+    font-size: 13px;
+    color: #71717a;
+}
+
+QLabel#FieldLabel {
+    font-size: 13px;
+    font-weight: 500;
+    color: #a1a1aa;
+}
+
+QLineEdit#FieldInput {
+    background-color: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #f4f4f5;
+    font-size: 14px;
+    min-height: 20px;
+}
+
+QLineEdit#FieldInput:focus {
+    border-color: #ca8a04;
+}
+
+QLineEdit#FieldInput:hover {
+    border-color: #3f3f46;
+}
+
+QPushButton#LoginButton {
+    background-color: #ca8a04;
+    border: 1px solid #a16207;
+    border-radius: 8px;
+    color: #09090b;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px;
+    min-height: 20px;
+}
+
+QPushButton#LoginButton:hover {
+    background-color: #eab308;
+}
+
+QPushButton#LoginButton:disabled {
+    background-color: #713f12;
+    border-color: #713f12;
+    color: #451a03;
+}
+
+QPushButton#RegisterLink {
+    background-color: transparent;
+    border: none;
+    color: #38bdf8;
+    font-size: 13px;
+    padding: 0 2px;
+    font-weight: 500;
+}
+
+QPushButton#RegisterLink:hover {
+    color: #7dd3fc;
+}
+
+QLabel#ErrorLabel {
+    color: #fca5a5;
+    font-size: 13px;
+    background-color: #450a0a;
+    border: 1px solid #7f1d1d;
+    border-radius: 7px;
+    padding: 8px 10px;
+}
+
+/* ── Dashboard ────────────────────────────────────────── */
+
+QScrollArea#DashScroll {
+    border: none;
+    background: transparent;
+}
+
+QLineEdit#SearchInput {
+    background-color: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #f4f4f5;
+    font-size: 14px;
+    min-height: 20px;
+}
+
+QLineEdit#SearchInput:focus {
+    border-color: #3f3f46;
+}
+
+QLabel#DashSectionLabel {
+    font-size: 11px;
+    font-weight: 600;
+    color: #52525b;
+    letter-spacing: 0.8px;
+    padding: 10px 0 4px 0;
+}
+
+QWidget#ExamCardLive {
+    background-color: #0d1a0f;
+    border-radius: 10px;
+    border: 1px solid #166534;
+}
+
+QWidget#ExamCardUpcoming {
+    background-color: #111113;
+    border-radius: 10px;
+    border: 1px solid #27272a;
+}
+
+QLabel#CardName {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f4f4f5;
+}
+
+QLabel#CardMeta {
+    font-size: 12px;
+    color: #71717a;
+}
+
+QLabel#LiveBadge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #4ade80;
+    background-color: #052e16;
+    border: 1px solid #166534;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+QLabel#UpcomingBadge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #facc15;
+    background-color: #1c1400;
+    border: 1px solid #713f12;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+QPushButton#JoinButton {
+    background-color: #16a34a;
+    border: 1px solid #15803d;
+    border-radius: 8px;
+    color: #f0fdf4;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px;
+}
+
+QPushButton#JoinButton:hover {
+    background-color: #22c55e;
+    border-color: #16a34a;
+}
+
+QPushButton#JoinButtonDisabled {
+    background-color: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    color: #3f3f46;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px;
+}
+
+QPushButton#WaitButton {
+    background-color: #1c1400;
+    border: 1px solid #713f12;
+    border-radius: 8px;
+    color: #facc15;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px;
+}
+
+QPushButton#WaitButton:hover {
+    background-color: #292000;
+    border-color: #a16207;
+}
+
+/* ── Countdown ────────────────────────────────────────── */
+
+QLabel#CountdownLabel {
+    font-size: 56px;
+    font-weight: 700;
+    color: #facc15;
+    letter-spacing: 4px;
+}
+
+QLabel#EmptyLabel {
+    font-size: 14px;
+    color: #52525b;
+    padding: 40px;
+}
+
+QPushButton#RefreshButton {
+    background-color: transparent;
+    border: 1px solid #27272a;
+    border-radius: 7px;
+    color: #71717a;
+    font-size: 13px;
+    padding: 6px 12px;
+}
+
+QPushButton#RefreshButton:hover {
+    background-color: #18181b;
+    color: #a1a1aa;
+    border-color: #3f3f46;
+}
+
+QPushButton#RefreshButton:disabled {
+    color: #3f3f46;
+}
+
+QPushButton#SignOutButton {
+    background-color: transparent;
+    border: 1px solid #27272a;
+    border-radius: 7px;
+    color: #71717a;
+    font-size: 13px;
+    padding: 6px 12px;
+}
+
+QPushButton#SignOutButton:hover {
+    background-color: #18181b;
+    color: #f87171;
+    border-color: #7f1d1d;
+}
