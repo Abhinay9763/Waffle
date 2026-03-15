@@ -10,12 +10,11 @@ from dashboardWindow import DashboardWindow
 from countdownWindow import CountdownWindow
 from examWindow import MainWindow
 from models import Exam
-
-API = "http://localhost:8000"
+from config import API
 
 app = QApplication([])
 
-# ── Catch ALL unhandled exceptions and write to crash.log ──
+# crash logging that never worked
 def _excepthook(exc_type, exc_value, exc_tb):
     text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
     print(text, file=sys.stderr)
@@ -37,12 +36,12 @@ sys.unraisablehook = _unraisablehook
 with open("dark.qss", "r") as f:
     app.setStyleSheet(f.read())
 
-# Strong references — prevents windows from being garbage-collected
+# prevent garbaaage collection cus python is an idiot
 _windows: dict = {}
 _token: str = ""
 
 
-# ── Exam fetch worker ───────────────────────────────────────────────────────
+
 
 class ExamTakeWorker(QObject):
     finished = pyqtSignal(dict)

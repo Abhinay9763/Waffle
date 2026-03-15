@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLineEdit, QScrollArea, QSizePolicy,
 )
 
-API = "http://localhost:8000"
+from config import API, APP_NAME
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ class DashboardWindow(QMainWindow):
         self._fetch_thread = None
         self._fetch_worker = None
 
-        self.setWindowTitle("Waffle")
+        self.setWindowTitle(APP_NAME)
 
         # ── Root ────────────────────────────────────────────
         root = QWidget()
@@ -118,7 +118,7 @@ class DashboardWindow(QMainWindow):
         header_layout.setSpacing(10)
         header.setLayout(header_layout)
 
-        brand = QLabel("Waffle")
+        brand = QLabel(APP_NAME)
         brand.setObjectName("ExamTitle")
         header_layout.addWidget(brand)
         header_layout.addStretch(1)

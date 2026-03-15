@@ -1,8 +1,7 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import PaperBuilder from "@/components/papers/PaperBuilder";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API } from "@/lib/config";
 
 export default async function PaperDetailPage({
   params,

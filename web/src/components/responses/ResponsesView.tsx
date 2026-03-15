@@ -5,8 +5,7 @@ import { getCookie } from "cookies-next";
 import Link from "next/link";
 import { ArrowLeft, Download, Loader2, Users } from "lucide-react";
 import * as XLSX from "xlsx";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API } from "@/lib/config";
 
 interface ResponseRow {
   id: number;

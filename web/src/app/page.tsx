@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API } from "@/lib/config";
 
 export default async function RootPage() {
   const token = (await cookies()).get("wfl-session")?.value;

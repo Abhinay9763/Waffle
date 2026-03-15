@@ -11,6 +11,7 @@ from tenacity import retry
 from models import Register
 from supa import db
 from utils import hashPassword, verifyPassword, serializer, send_auth_mail
+from config import FRONTEND_URL
 from routes.exam import router as examRouter
 from routes.auth import router as authRouter
 from routes.paper import router as paperRouter
@@ -29,7 +30,7 @@ app = FastAPI(lifespan=apiStart)
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[FRONTEND_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", "x-session-token"],

@@ -5,6 +5,8 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
 )
 
+from config import APP_NAME
+
 
 class CountdownWindow(QMainWindow):
     def __init__(self, exam: dict, on_start, on_cancel):
@@ -18,7 +20,7 @@ class CountdownWindow(QMainWindow):
         self._on_start = on_start
         self._on_cancel = on_cancel
 
-        self.setWindowTitle("Waffle")
+        self.setWindowTitle(APP_NAME)
 
         root = QWidget()
         root.setObjectName("MainBackground")

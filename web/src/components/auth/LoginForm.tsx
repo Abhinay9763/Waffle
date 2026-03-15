@@ -8,8 +8,7 @@ import { z } from "zod";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { setCookie } from "cookies-next";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API } from "@/lib/config";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address"),

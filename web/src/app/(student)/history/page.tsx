@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import { Loader2 } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API } from "@/lib/config";
 
 interface MyResponse {
   id: number;

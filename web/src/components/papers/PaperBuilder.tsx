@@ -8,8 +8,7 @@ import {
   Save, X, GripVertical, Loader2, Copy, Lock, Mic,
 } from "lucide-react";
 import { getCookie } from "cookies-next";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API } from "@/lib/config";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

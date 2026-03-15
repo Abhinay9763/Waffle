@@ -6,8 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Clock, BarChart2, LogOut } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API, APP_NAME } from "@/lib/config";
 
 const NAV = [
   { label: "Dashboard",  href: "/student",   icon: LayoutDashboard },
@@ -51,7 +50,7 @@ export default function StudentSidebar() {
         <span className="text-yellow-400">
           <WaffleLogo size={26} />
         </span>
-        <span className="text-sm font-semibold text-zinc-100 tracking-tight">Waffle</span>
+        <span className="text-sm font-semibold text-zinc-100 tracking-tight">{APP_NAME}</span>
         <span className="ml-auto text-[10px] font-medium text-sky-400 border border-sky-800/50 bg-sky-950/30 rounded px-1.5 py-0.5">
           STUDENT
         </span>

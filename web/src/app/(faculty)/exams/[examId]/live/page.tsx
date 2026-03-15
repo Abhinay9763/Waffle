@@ -6,8 +6,8 @@ import { useParams } from "next/navigation";
 import {
   Loader2, RefreshCw, Radio, CheckCircle2, Clock3, RotateCcw, AlertCircle,
 } from "lucide-react";
+import { API } from "@/lib/config";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const POLL_MS = 10_000;
 
 // ── Types ──────────────────────────────────────────────────────────────────

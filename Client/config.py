@@ -1,4 +1,7 @@
-URL = "http://localhost:8000/"
+APP_NAME = "Waffle"
 
-loginRoute = URL + "user/login"
-regRoute = URL + "user/register"
+API = "http://localhost:8000"
+WEB_URL = "http://localhost:3000"
+
+loginRoute      = API + "/user/login"
+WEB_REGISTER_URL = WEB_URL + "/register"

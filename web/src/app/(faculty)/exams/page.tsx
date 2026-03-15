@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
 import { CalendarDays, ChevronRight, Loader2, Plus, Radio } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API } from "@/lib/config";
 
 interface Exam {
   id: number;
@@ -69,6 +68,15 @@ function ExamRow({ exam }: { exam: Exam }) {
       <span className={`shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded border ${STATUS_STYLE[status]}`}>
         {STATUS_LABEL[status]}
       </span>
+      {status === "live" && (
+        <Link
+          href={`/exams/${exam.id}/live`}
+          className="shrink-0 flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 hover:border-emerald-700 px-2.5 py-1 rounded-lg transition-colors"
+        >
+          <Radio className="w-3 h-3" />
+          Control Centre
+        </Link>
+      )}
       <Link
         href={`/responses/${exam.id}`}
         className="shrink-0 flex items-center gap-1 text-xs text-zinc-500 hover:text-yellow-400 border border-zinc-700 hover:border-yellow-600 px-2.5 py-1 rounded-lg transition-colors"

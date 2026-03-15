@@ -1,4 +1,3 @@
-
 import datetime
 from datetime import timezone
 
@@ -10,8 +9,7 @@ from PyQt6.QtWidgets import (
     QSplitter, QMessageBox,
 )
 from models import Exam, Question, QuestionResponse, Submission
-
-API = "http://localhost:8000"
+from config import API, APP_NAME
 
 
 # ── Submit worker ────────────────────────────────────────────────────────────
@@ -115,7 +113,7 @@ class MainWindow(QMainWindow):
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setWindowTitle("Waffle~")
+        self.setWindowTitle(APP_NAME)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
 
         main_layout = QVBoxLayout()

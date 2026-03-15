@@ -5,7 +5,7 @@ import httpx
 from PyQt6.QtCore import QObject, pyqtSignal
 from httpx import Response
 
-from config import loginRoute, regRoute
+from config import loginRoute
 
 def isValidEmail(email : str):
     if not "@" in email or not "." in email:
@@ -40,44 +40,6 @@ class LoginWorker(QObject):
                 )
             self.finished.emit(response)
 
-
-        except Exception as e:
-            self.error.emit(str(e))
-
-class RegisterWorker(QObject):
-    finished = pyqtSignal(Response)
-    error = pyqtSignal(str)
-
-    def __init__(self,email,password):
-        super().__init__()
-        self.email = email
-        self.password = password
-
-    def run(self):
-        if not self.email or not self.password:
-            self.error.emit("Empty Field! Please Enter Correct Credentials")
-            return
-        if not isValidEmail(self.email):
-            self.error.emit("Invalid Email!")
-            return
-        try:
-            print("httpx")
-            with httpx.Client(timeout=10) as client:
-                response = client.post(
-                    regRoute,
-                    json={
-                        "email": self.email,
-                        "password": self.password
-                    }
-                )
-                print(response)
-            self.finished.emit(response)
-
-            # if response.status_code == 200:
-            #     print(response.json())
-            #     self.finished.emit(response.json())
-            # else:
-            #     self.error.emit(response.text)
 
         except Exception as e:
             self.error.emit(str(e))

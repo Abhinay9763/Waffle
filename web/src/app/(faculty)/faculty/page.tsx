@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
 import { CalendarDays, ChevronRight, FileText, Loader2, Plus, Radio } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API } from "@/lib/config";
 
 interface Exam {
   id: number;

@@ -8,8 +8,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QPushButton,
 )
 
-API = "http://localhost:8000"
-WEB_REGISTER_URL = "http://localhost:3000/register"
+from config import API, WEB_REGISTER_URL, APP_NAME
 
 
 class LoginWorker(QObject):
@@ -44,7 +43,7 @@ class LoginWindow(QMainWindow):
         self._thread = None
         self._worker = None
 
-        self.setWindowTitle("Waffle")
+        self.setWindowTitle(APP_NAME)
 
         root = QWidget()
         root.setObjectName("MainBackground")
@@ -62,7 +61,7 @@ class LoginWindow(QMainWindow):
         card.setLayout(card_layout)
 
         # Title
-        title = QLabel("Waffle")
+        title = QLabel(APP_NAME)
         title.setObjectName("LoginTitle")
         subtitle = QLabel("Sign in to your student account")
         subtitle.setObjectName("LoginSubtitle")
