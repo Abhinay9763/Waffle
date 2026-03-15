@@ -1,15 +1,14 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
-from starlette.status import HTTP_202_ACCEPTED
-
-
-from postgrest import APIError
 from starlette.background import BackgroundTasks
 from starlette.exceptions import HTTPException
-from starlette.status import HTTP_409_CONFLICT, HTTP_202_ACCEPTED, HTTP_500_INTERNAL_SERVER_ERROR, HTTP_201_CREATED, \
-    HTTP_400_BAD_REQUEST, HTTP_200_OK, HTTP_404_NOT_FOUND, HTTP_401_UNAUTHORIZED
-
+from starlette.status import (
+    HTTP_200_OK, HTTP_201_CREATED, HTTP_202_ACCEPTED,
+    HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED,
+    HTTP_404_NOT_FOUND, HTTP_409_CONFLICT,
+    HTTP_500_INTERNAL_SERVER_ERROR,
+)
 
 from models import Register, Login, Role, Session
 from supa import db
@@ -64,24 +63,18 @@ async def activateMail(token : str):
         user = Register.model_validate_json(serializer.loads(
             token,
             salt= "email-auth",
-            max_age= 10 * 60 #10 mins
+            max_age= 10 * 60
         ))
+    except Exception:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid or expired token.")
 
-        user.password = hashPassword(user.password)
-        response = await db.client.table("Users").upsert(user.model_dump()).execute()
-        return {"msg" : "created User"}
-        print(response)
-    except APIError as e:
-        print(e)
-        return HTTPException(
-            status_code=HTTP_409_CONFLICT,
-            detail="User With Email Already Exists"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired token"
-        )
+    existing = await db.client.table("Users").select("id").eq("email", user.email).execute()
+    if existing.data:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Account already activated.")
+
+    user.password = hashPassword(user.password)
+    await db.client.table("Users").insert(user.model_dump()).execute()
+    return {"msg": "created User"}
 
 
 @router.get("/user/session", status_code=HTTP_200_OK)
