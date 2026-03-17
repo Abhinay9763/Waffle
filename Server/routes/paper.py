@@ -114,7 +114,7 @@ async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_curr
         try:
             await db.client.storage.from_("question-images").remove(keys)
         except Exception:
-            pass  # cleanup is best-effort; don't fail the save
+            pass  # tf should i do
 
     data = paper.model_dump(exclude={"id", "creator_id"})
     await db.client.table("QuestionPapers").update(data).eq("id", paper_id).execute()
@@ -123,19 +123,12 @@ async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_curr
 
 @router.delete("/paper/{paper_id}")
 async def deletePaper(paper_id: int, user=Depends(get_current_user)):
-    existing = await db.client.table("QuestionPapers") \
-        .select("id,questions") \
-        .eq("id", paper_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
+    existing = await (db.client.table("QuestionPapers").select("id,questions").eq("id", paper_id).eq("creator_id", user["id"])
+                      .execute())
     if not existing.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
 
-    exam_res = await db.client.table("Exams") \
-        .select("id") \
-        .eq("questionpaper_id", paper_id) \
-        .limit(1) \
-        .execute()
+    exam_res = await db.client.table("Exams").select("id").eq("questionpaper_id", paper_id).limit(1).execute()
     if exam_res.data:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Paper is in use by an exam and cannot be deleted.")
 
@@ -146,7 +139,7 @@ async def deletePaper(paper_id: int, user=Depends(get_current_user)):
         try:
             await db.client.storage.from_("question-images").remove(keys)
         except Exception:
-            pass  # best-effort
+            pass  # just catch and pass. wtf am i supposed to do here
 
     await db.client.table("QuestionPapers").delete().eq("id", paper_id).execute()
     return {"msg": "Paper deleted"}
@@ -154,11 +147,8 @@ async def deletePaper(paper_id: int, user=Depends(get_current_user)):
 
 @router.post("/paper/{paper_id}/clone", status_code=HTTP_201_CREATED)
 async def clonePaper(paper_id: int, user=Depends(get_current_user)):
-    original = await db.client.table("QuestionPapers") \
-        .select("questions,answers") \
-        .eq("id", paper_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
+    original = await (db.client.table("QuestionPapers").select("questions,answers").eq("id", paper_id).eq("creator_id", user["id"])
+                      .execute())
     if not original.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
 
