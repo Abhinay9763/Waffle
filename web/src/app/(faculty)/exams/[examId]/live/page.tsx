@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { getCookie } from "cookies-next";
 import { useParams } from "next/navigation";
 import {
-  Loader2, RefreshCw, Radio, CheckCircle2, Clock3, RotateCcw, AlertCircle,
+  Loader2, RefreshCw, Radio, CheckCircle2, Clock3, RotateCcw, AlertCircle, StopCircle,
 } from "lucide-react";
 import { API } from "@/lib/config";
 
@@ -77,6 +77,7 @@ export default function LiveControlCentre() {
   const [polling, setPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retaking, setRetaking] = useState<number | null>(null);
+  const [stopping, setStopping] = useState(false);
   const [, tick] = useState(0); // forces 1s re-render for live countdowns
 
   const token = useRef<string>("");
@@ -126,6 +127,20 @@ export default function LiveControlCentre() {
       await fetchAll();
     } finally {
       setRetaking(null);
+    }
+  }, [examId, fetchAll]);
+
+  const handleStop = useCallback(async () => {
+    if (!confirm("Stop the exam now? Students will no longer be able to submit.")) return;
+    setStopping(true);
+    try {
+      await fetch(`${API}/exam/${examId}/stop`, {
+        method: "POST",
+        headers: { "x-session-token": token.current },
+      });
+      await fetchAll();
+    } finally {
+      setStopping(false);
     }
   }, [examId, fetchAll]);
 
@@ -185,6 +200,18 @@ export default function LiveControlCentre() {
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
+          {new Date(exam.end) > new Date() && (
+            <button
+              onClick={handleStop}
+              disabled={stopping}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-red-900/60 text-red-400 hover:bg-red-950/40 hover:border-red-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {stopping
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <StopCircle className="w-3 h-3" />}
+              {stopping ? "Stopping…" : "Stop exam"}
+            </button>
+          )}
         </div>
       </div>
 

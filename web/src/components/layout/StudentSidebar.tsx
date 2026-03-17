@@ -46,11 +46,11 @@ export default function StudentSidebar() {
     <aside className="flex flex-col w-56 h-screen bg-zinc-900 border-r border-zinc-800 shrink-0">
 
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 h-16 border-b border-zinc-800 shrink-0">
+      <div className="flex items-center gap-2.5 px-5 h-20 border-b border-zinc-800 shrink-0">
         <span className="text-yellow-400">
-          <WaffleLogo size={26} />
+          <WaffleLogo size={72} />
         </span>
-        <span className="text-sm font-semibold text-zinc-100 tracking-tight">{APP_NAME}</span>
+        <span className="text-lg font-semibold text-zinc-100 tracking-tight">{APP_NAME}</span>
         <span className="ml-auto text-[10px] font-medium text-sky-400 border border-sky-800/50 bg-sky-950/30 rounded px-1.5 py-0.5">
           STUDENT
         </span>

@@ -21,6 +21,14 @@ const schema = z
     questionpaper_id: z.coerce.number().min(1, "Select a question paper"),
     start: z.string().min(1, "Start time is required"),
     end: z.string().min(1, "End time is required"),
+    join_window: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
+      z.number().int().min(1, "Must be at least 1 minute").optional(),
+    ),
+  })
+  .refine((d) => new Date(d.start) > new Date(), {
+    message: "Start time cannot be in the past",
+    path: ["start"],
   })
   .refine((d) => new Date(d.end) > new Date(d.start), {
     message: "End time must be after start time",
@@ -84,6 +92,16 @@ export default function ExamScheduleForm() {
   const [papersLoading, setPapersLoading] = useState(true);
   const [serverError, setServerError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
+  const [minDatetime, setMinDatetime] = useState("");
+
+  useEffect(() => {
+    const now = new Date();
+    setMinDatetime(
+      new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16)
+    );
+  }, []);
 
   const {
     register,
@@ -123,6 +141,7 @@ export default function ExamScheduleForm() {
           start: new Date(data.start).toISOString(),
           end: new Date(data.end).toISOString(),
           creator_id: 0,
+          join_window: data.join_window ?? null,
         }),
       });
     } catch {
@@ -233,6 +252,7 @@ export default function ExamScheduleForm() {
               <input
                 id="start"
                 type="datetime-local"
+                min={minDatetime}
                 {...register("start")}
                 className={`${inputBase} ${errors.start ? inputError : inputNormal}`}
                 style={{ colorScheme: "dark" }}
@@ -250,6 +270,26 @@ export default function ExamScheduleForm() {
               />
               <FieldError message={errors.end?.message} />
             </div>
+          </div>
+
+          {/* Join window */}
+          <div className="space-y-1.5">
+            <Label htmlFor="join_window">
+              Join window <span className="text-zinc-600 font-normal">(optional)</span>
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="join_window"
+                type="number"
+                min={1}
+                placeholder="e.g. 15"
+                {...register("join_window")}
+                className={`w-32 rounded-lg border bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:ring-2 focus:ring-yellow-500/70 focus:border-yellow-500 ${errors.join_window ? inputError : inputNormal}`}
+              />
+              <span className="text-sm text-zinc-500">minutes after start</span>
+            </div>
+            <p className="text-xs text-zinc-600">Students cannot join after this many minutes. Leave blank for no limit.</p>
+            <FieldError message={errors.join_window?.message} />
           </div>
 
           {/* Submit */}

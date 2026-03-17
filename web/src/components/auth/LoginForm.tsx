@@ -8,7 +8,7 @@ import { z } from "zod";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { setCookie } from "cookies-next";
-import { API } from "@/lib/config";
+import { API, LOGO } from "@/lib/config";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -18,31 +18,8 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 function WaffleLogo() {
-  return (
-    <svg
-      width="36"
-      height="36"
-      viewBox="0 0 36 36"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      {[0, 1, 2, 3].map((row) =>
-        [0, 1, 2, 3].map((col) => (
-          <rect
-            key={`${row}-${col}`}
-            x={col * 9 + 1}
-            y={row * 9 + 1}
-            width="7"
-            height="7"
-            rx="1.5"
-            fill="currentColor"
-            opacity={1 - (row + col) * 0.06}
-          />
-        ))
-      )}
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={LOGO} alt="SMEC logo" width={120} height={120} style={{ objectFit: "contain" }} />;
 }
 
 const FEATURES = [
@@ -132,7 +109,7 @@ export default function LoginForm() {
         {/* Logo */}
         <div className="flex items-center gap-3 text-yellow-400">
           <WaffleLogo />
-          <span className="text-xl font-semibold tracking-tight text-zinc-100">
+          <span className="translate-y-2 text-3xl font-semibold tracking-tight text-zinc-100">
             Waffle
           </span>
         </div>
@@ -176,7 +153,7 @@ export default function LoginForm() {
           {/* Mobile-only logo */}
           <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
             <WaffleLogo />
-            <span className="text-lg font-semibold text-zinc-100">Waffle</span>
+            <span className="text-3xl font-semibold text-zinc-100">Waffle</span>
           </div>
 
           {/* Card underlay */}

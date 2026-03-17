@@ -41,6 +41,7 @@ class Exam(BaseModel):
     end : datetime
     creator_id : int
     questionpaper_id : int
+    join_window : Optional[int] = None  # minutes after start; None = no limit
 
 class Response(BaseModel):
     id : Optional[int] = None

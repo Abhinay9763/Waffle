@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle2, Mail } from "lucide-react";
-import { API } from "@/lib/config";
+import { API, LOGO } from "@/lib/config";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -45,21 +45,8 @@ type Role = "Student" | "Faculty";
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function WaffleLogo() {
-  return (
-    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
-      {[0, 1, 2, 3].map((row) =>
-        [0, 1, 2, 3].map((col) => (
-          <rect
-            key={`${row}-${col}`}
-            x={col * 9 + 1} y={row * 9 + 1}
-            width="7" height="7" rx="1.5"
-            fill="currentColor"
-            opacity={1 - (row + col) * 0.06}
-          />
-        ))
-      )}
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={LOGO} alt="SMEC logo" width={120} height={120} style={{ objectFit: "contain" }} />;
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -145,7 +132,7 @@ function SuccessState({ email }: { email: string }) {
     <div className="w-full max-w-sm space-y-8">
       <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
         <WaffleLogo />
-        <span className="text-lg font-semibold text-zinc-100">Waffle</span>
+        <span className="text-3xl font-semibold text-zinc-100">Waffle</span>
       </div>
 
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-8 space-y-5 text-center">
@@ -247,7 +234,7 @@ export default function RegisterForm() {
       >
         <div className="flex items-center gap-3 text-yellow-400">
           <WaffleLogo />
-          <span className="text-xl font-semibold tracking-tight text-zinc-100">Waffle</span>
+          <span className="text-3xl font-semibold tracking-tight text-zinc-100">Waffle</span>
         </div>
 
         <div className="space-y-8">
@@ -286,7 +273,7 @@ export default function RegisterForm() {
 
             <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
               <WaffleLogo />
-              <span className="text-lg font-semibold text-zinc-100">Waffle</span>
+              <span className="text-3xl font-semibold text-zinc-100">Waffle</span>
             </div>
 
             {/* Card underlay */}

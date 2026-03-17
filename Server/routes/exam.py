@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from starlette.status import HTTP_201_CREATED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
+from starlette.status import HTTP_201_CREATED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST
 
 from deps import get_current_user
 from models import Exam, RetakeRequest
@@ -43,6 +43,27 @@ async def createExam(exam: Exam, user=Depends(get_current_user)):
     return {"msg": "Exam created", "id": response.data[0]["id"]}
 
 
+@router.delete("/exam/{exam_id}")
+async def deleteExam(exam_id: int, user=Depends(get_current_user)):
+    exam_res = await db.client.table("Exams") \
+        .select("id,start,end") \
+        .eq("id", exam_id) \
+        .eq("creator_id", user["id"]) \
+        .execute()
+    if not exam_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    exam = exam_res.data[0]
+    now = datetime.now(timezone.utc)
+    start = datetime.fromisoformat(exam["start"].replace("Z", "+00:00"))
+    end   = datetime.fromisoformat(exam["end"].replace("Z", "+00:00"))
+    if start <= now <= end:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Cannot delete a live exam. Stop it first.")
+
+    await db.client.table("Exams").delete().eq("id", exam_id).execute()
+    return {"msg": "Exam deleted."}
+
+
 @router.get("/exam/available")
 async def availableExams(user=Depends(get_current_user)):
     """All exams visible to students — no creator filter."""
@@ -62,12 +83,24 @@ async def availableExams(user=Depends(get_current_user)):
 async def takeExam(exam_id: int, user=Depends(get_current_user)):
     """Return full exam + paper data for a student to take."""
     exam_res = await db.client.table("Exams") \
-        .select("name,total_marks,start,end,questionpaper_id") \
+        .select("name,total_marks,start,end,questionpaper_id,join_window") \
         .eq("id", exam_id) \
         .execute()
     if not exam_res.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
     exam = exam_res.data[0]
+
+    # Join-window check: reject late joiners
+    join_window = exam.get("join_window")
+    if join_window is not None:
+        now = datetime.now(timezone.utc)
+        start = datetime.fromisoformat(exam["start"].replace("Z", "+00:00"))
+        cutoff = start + timedelta(minutes=join_window)
+        if now > cutoff:
+            raise HTTPException(
+                status_code=HTTP_403_FORBIDDEN,
+                detail=f"Join window closed. Students could only join within {join_window} minute(s) of the exam starting.",
+            )
 
     submitted = await db.client.table("Responses") \
         .select("id") \
@@ -276,3 +309,19 @@ async def grantRetake(exam_id: int, body: RetakeRequest, user=Depends(get_curren
         "event":   "retake_granted",
     }).execute()
     return {"msg": "Retake granted."}
+
+
+@router.post("/exam/{exam_id}/stop")
+async def stopExam(exam_id: int, user=Depends(get_current_user)):
+    """Faculty: end the exam immediately by setting end time to now."""
+    exam_res = await db.client.table("Exams") \
+        .select("id") \
+        .eq("id", exam_id) \
+        .eq("creator_id", user["id"]) \
+        .execute()
+    if not exam_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.client.table("Exams").update({"end": now}).eq("id", exam_id).execute()
+    return {"msg": "Exam stopped."}

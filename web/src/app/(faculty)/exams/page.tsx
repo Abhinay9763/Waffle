@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
-import { CalendarDays, ChevronRight, Loader2, Plus, Radio } from "lucide-react";
+import { CalendarDays, ChevronRight, Loader2, Plus, Radio, Trash2 } from "lucide-react";
 import { API } from "@/lib/config";
 
 interface Exam {
@@ -45,7 +45,11 @@ const STATUS_STYLE = {
 };
 const STATUS_LABEL = { live: "Live", upcoming: "Upcoming", ended: "Ended" };
 
-function ExamRow({ exam }: { exam: Exam }) {
+function ExamRow({ exam, onDelete, deleting }: {
+  exam: Exam;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   const status = statusOf(exam.start, exam.end);
   return (
     <div className="flex items-center gap-4 px-4 py-3.5 hover:bg-zinc-800/30 transition-colors">
@@ -84,6 +88,16 @@ function ExamRow({ exam }: { exam: Exam }) {
         {status === "live" ? "Live view" : "Results"}
         <ChevronRight className="w-3.5 h-3.5" />
       </Link>
+      {status !== "live" && (
+        <button
+          onClick={onDelete}
+          disabled={deleting}
+          className="shrink-0 p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-950/30 border border-transparent hover:border-red-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Delete exam"
+        >
+          {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+        </button>
+      )}
     </div>
   );
 }
@@ -91,6 +105,7 @@ function ExamRow({ exam }: { exam: Exam }) {
 export default function ExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     const token = getCookie("wfl-session") as string | undefined;
@@ -102,6 +117,24 @@ export default function ExamsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDelete = async (exam: Exam) => {
+    if (!confirm(`Delete "${exam.name}"? This cannot be undone.`)) return;
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) return;
+    setDeletingId(exam.id);
+    const res = await fetch(`${API}/exam/${exam.id}`, {
+      method: "DELETE",
+      headers: { "x-session-token": token },
+    }).catch(() => null);
+    setDeletingId(null);
+    if (res?.ok) {
+      setExams((prev) => prev.filter((e) => e.id !== exam.id));
+    } else {
+      const body = await res?.json().catch(() => ({})) ?? {};
+      alert(body.detail ?? "Failed to delete exam.");
+    }
+  };
 
   if (loading) {
     return (
@@ -161,7 +194,14 @@ export default function ExamsPage() {
               {label}
             </div>
             <div className="rounded-xl border border-zinc-800 overflow-hidden divide-y divide-zinc-800/60">
-              {groupExams.map((e) => <ExamRow key={e.id} exam={e} />)}
+              {groupExams.map((e) => (
+                <ExamRow
+                  key={e.id}
+                  exam={e}
+                  onDelete={() => handleDelete(e)}
+                  deleting={deletingId === e.id}
+                />
+              ))}
             </div>
           </section>
         ))}

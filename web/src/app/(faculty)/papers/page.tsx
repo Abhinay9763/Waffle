@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
-import { FileText, Loader2, Plus } from "lucide-react";
+import { FileDown, FileText, Loader2, Plus } from "lucide-react";
 import { API } from "@/lib/config";
 
 interface Paper {
@@ -12,9 +12,64 @@ interface Paper {
   total_marks: number;
 }
 
+async function downloadDoc(paperId: number, paperName: string, token: string) {
+  const res = await fetch(`${API}/paper/${paperId}`, {
+    headers: { "x-session-token": token },
+  });
+  if (!res.ok) return;
+  const data = await res.json();
+  const sections: any[] = data.questions?.sections ?? [];
+
+  const { Document, Packer, Paragraph, TextRun } = await import("docx");
+
+  const paragraphs: InstanceType<typeof Paragraph>[] = [];
+  let qNum = 0;
+
+  for (const section of sections) {
+    if (sections.length > 1) {
+      paragraphs.push(
+        new Paragraph({
+          children: [new TextRun({ text: section.name, bold: true, size: 26 })],
+          spacing: { before: 320, after: 160 },
+        })
+      );
+    }
+
+    for (const q of section.questions) {
+      qNum++;
+      paragraphs.push(
+        new Paragraph({
+          children: [new TextRun({ text: `Q${qNum}.  ${q.text}`, bold: true })],
+          spacing: { before: 240, after: 120 },
+        })
+      );
+      const letters = ["A", "B", "C", "D"];
+      for (let i = 0; i < 4; i++) {
+        paragraphs.push(
+          new Paragraph({
+            children: [new TextRun(`${letters[i]})  ${q.options[i] ?? ""}`)],
+            indent: { left: 360 },
+            spacing: { after: 80 },
+          })
+        );
+      }
+    }
+  }
+
+  const doc = new Document({ sections: [{ children: paragraphs }] });
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${paperName}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function PapersPage() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   useEffect(() => {
     const token = getCookie("wfl-session") as string | undefined;
@@ -26,6 +81,14 @@ export default function PapersPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDownload = async (paper: Paper) => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token || downloadingId !== null) return;
+    setDownloadingId(paper.id);
+    await downloadDoc(paper.id, paper.name, token).catch(() => {});
+    setDownloadingId(null);
+  };
 
   if (loading) {
     return (
@@ -84,6 +147,16 @@ export default function PapersPage() {
                 <p className="text-xs text-zinc-600">{paper.total_marks} marks</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => handleDownload(paper)}
+                  disabled={downloadingId !== null}
+                  className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-blue-400 border border-zinc-700 hover:border-blue-700 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {downloadingId === paper.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <FileDown className="w-3.5 h-3.5" />}
+                  {downloadingId === paper.id ? "Generating…" : ".docx"}
+                </button>
                 <Link
                   href={`/papers/${paper.id}`}
                   className="text-xs text-zinc-500 hover:text-zinc-200 border border-zinc-700 hover:border-zinc-500 px-2.5 py-1 rounded-lg transition-colors"
