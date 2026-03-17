@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { getCookie } from "cookies-next";
-import { CalendarClock, FileText, Loader2, CheckCircle2, Plus } from "lucide-react";
+import { CalendarClock, FileText, Loader2, CheckCircle2, Plus, Clock } from "lucide-react";
 import Link from "next/link";
 import { API } from "@/lib/config";
 
@@ -21,6 +21,7 @@ const schema = z
     questionpaper_id: z.coerce.number().min(1, "Select a question paper"),
     start: z.string().min(1, "Start time is required"),
     end: z.string().min(1, "End time is required"),
+    duration_minutes: z.coerce.number().min(1, "Duration must be at least 1 minute"),
     join_window: z.preprocess(
       (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
       z.number().int().min(1, "Must be at least 1 minute").optional(),
@@ -107,11 +108,31 @@ export default function ExamScheduleForm() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      duration_minutes: 120, // Default to 2 hours
+    }
+  });
 
   const paperIdVal = watch("questionpaper_id");
+  const startTime = watch("start");
+  const duration = watch("duration_minutes");
   const selectedPaper = papers.find((p) => p.id === Number(paperIdVal));
+
+  // Auto-update end time when start time or duration changes
+  useEffect(() => {
+    if (startTime && duration) {
+      const start = new Date(startTime);
+      const end = new Date(start.getTime() + duration * 60000); // duration in minutes
+      const endDatetime = new Date(end.getTime() - end.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+      setValue("end", endDatetime);
+    }
+  }, [startTime, duration, setValue]);
 
   useEffect(() => {
     const token = getCookie("wfl-session") as string | undefined;
@@ -155,6 +176,16 @@ export default function ExamScheduleForm() {
       const body = await res.json().catch(() => ({}));
       setServerError(body.detail ?? "Failed to create exam.");
     }
+  };
+
+  const setStartTimeToNow = () => {
+    const now = new Date();
+    // Add 1 minute 30 seconds (90 seconds)
+    now.setSeconds(now.getSeconds() + 90);
+    const localDatetime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+    setValue("start", localDatetime);
   };
 
   if (created) return <SuccessState name={created} />;
@@ -248,7 +279,17 @@ export default function ExamScheduleForm() {
           {/* Time window */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="start">Start time</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="start">Start time</Label>
+                <button
+                  type="button"
+                  onClick={setStartTimeToNow}
+                  className="text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-600 hover:border-yellow-400 bg-yellow-950/30 hover:bg-yellow-950/50 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                >
+                  <Clock className="w-3 h-3" />
+                  Now
+                </button>
+              </div>
               <input
                 id="start"
                 type="datetime-local"
@@ -270,6 +311,34 @@ export default function ExamScheduleForm() {
               />
               <FieldError message={errors.end?.message} />
             </div>
+          </div>
+
+          {/* Duration helper */}
+          <div className="space-y-1.5">
+            <Label htmlFor="duration_minutes">Quick set duration</Label>
+            <select
+              id="duration_minutes"
+              {...register("duration_minutes")}
+              className={`${inputBase} ${errors.duration_minutes ? inputError : inputNormal}`}
+              style={{ colorScheme: "dark" }}
+            >
+              <option value="">Select duration to auto-fill end time…</option>
+              <option value="30">30 minutes</option>
+              <option value="45">45 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="90">1.5 hours</option>
+              <option value="120">2 hours</option>
+              <option value="150">2.5 hours</option>
+              <option value="180">3 hours</option>
+              <option value="240">4 hours</option>
+              <option value="300">5 hours</option>
+            </select>
+            <FieldError message={errors.duration_minutes?.message} />
+            {startTime && duration && (
+              <p className="text-xs text-zinc-500">
+                Will end at {new Date(new Date(startTime).getTime() + duration * 60000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </p>
+            )}
           </div>
 
           {/* Join window */}

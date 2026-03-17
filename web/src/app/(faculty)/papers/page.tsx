@@ -14,57 +14,22 @@ interface Paper {
 }
 
 async function downloadDoc(paperId: number, paperName: string, token: string) {
-  const res = await fetch(`${API}/paper/${paperId}`, {
-    headers: { "x-session-token": token },
-  });
-  if (!res.ok) return;
-  const data = await res.json();
-  const sections: any[] = data.questions?.sections ?? [];
+  try {
+    const res = await fetch(`${API}/paper/${paperId}/download`, {
+      headers: { "x-session-token": token },
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-  const { Document, Packer, Paragraph, TextRun } = await import("docx");
-
-  const paragraphs: InstanceType<typeof Paragraph>[] = [];
-  let qNum = 0;
-
-  for (const section of sections) {
-    if (sections.length > 1) {
-      paragraphs.push(
-        new Paragraph({
-          children: [new TextRun({ text: section.name, bold: true, size: 26 })],
-          spacing: { before: 320, after: 160 },
-        })
-      );
-    }
-
-    for (const q of section.questions) {
-      qNum++;
-      paragraphs.push(
-        new Paragraph({
-          children: [new TextRun({ text: `Q${qNum}.  ${q.text}`, bold: true })],
-          spacing: { before: 240, after: 120 },
-        })
-      );
-      const letters = ["A", "B", "C", "D"];
-      for (let i = 0; i < 4; i++) {
-        paragraphs.push(
-          new Paragraph({
-            children: [new TextRun(`${letters[i]})  ${q.options[i] ?? ""}`)],
-            indent: { left: 360 },
-            spacing: { after: 80 },
-          })
-        );
-      }
-    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${paperName}.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    throw e;
   }
-
-  const doc = new Document({ sections: [{ children: paragraphs }] });
-  const blob = await Packer.toBlob(doc);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${paperName}.docx`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export default function PapersPage() {

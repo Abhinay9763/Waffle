@@ -1,11 +1,17 @@
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from starlette.status import HTTP_201_CREATED, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT
+import httpx
+from io import BytesIO
 
 from deps import get_current_user
 from models import QuestionPaper
 from supa import db, db_url
+from docx import Document
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 router = APIRouter()
 
@@ -167,6 +173,8 @@ async def clonePaper(paper_id: int, user=Depends(get_current_user)):
 
 
 ALLOWED_IMAGE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
+QUESTION_IMAGE_WIDTH = 1  # inches
+OPTION_IMAGE_WIDTH = 1   # inches
 
 @router.post("/paper/upload-image")
 async def uploadImage(file: UploadFile = File(...), user=Depends(get_current_user)):
@@ -178,3 +186,106 @@ async def uploadImage(file: UploadFile = File(...), user=Depends(get_current_use
     await db.client.storage.from_("question-images").upload(key, data, {"content-type": file.content_type})
     url = f"{db_url}/storage/v1/object/public/question-images/{key}"
     return {"url": url}
+
+
+@router.get("/paper/{paper_id}/download")
+async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
+    """Generate and download a Word document for the question paper with embedded images."""
+    # Get the paper
+    paper_res = await db.client.table("QuestionPapers") \
+        .select("*") \
+        .eq("id", paper_id) \
+        .eq("creator_id", user["id"]) \
+        .execute()
+
+    if not paper_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
+
+    paper_data = paper_res.data[0]
+    questions_data = paper_data.get("questions") or {}
+    sections = questions_data.get("sections", [])
+    meta = questions_data.get("meta", {})
+    paper_name = meta.get("exam_name") or f"Paper #{paper_id}"
+
+    # Create Word document
+    doc = Document()
+    qnum = 0
+
+    # Add title
+    title = doc.add_paragraph()
+    title_run = title.add_run(paper_name)
+    title_run.font.size = Pt(16)
+    title_run.font.bold = True
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    doc.add_paragraph()  # spacing
+
+    # Fetch images in parallel for better performance
+    async with httpx.AsyncClient(timeout=10) as client:
+        image_cache = {}
+
+        for section in sections:
+            # Add section title if multiple sections
+            if len(sections) > 1:
+                section_para = doc.add_paragraph()
+                section_run = section_para.add_run(section.get("name", "Section"))
+                section_run.font.bold = True
+                section_run.font.size = Pt(13)
+
+            for q in section.get("questions", []):
+                qnum += 1
+
+                # Question text
+                q_para = doc.add_paragraph()
+                q_run = q_para.add_run(f"Q{qnum}. {q.get('text', '')}")
+                q_run.font.bold = True
+
+                # Question image
+                if q.get("image_url"):
+                    try:
+                        if q["image_url"] not in image_cache:
+                            resp = await client.get(q["image_url"])
+                            if resp.status_code == 200:
+                                image_cache[q["image_url"]] = resp.content
+
+                        if q["image_url"] in image_cache:
+                            img_bytes = BytesIO(image_cache[q["image_url"]])
+                            doc.add_picture(img_bytes, width=Inches(QUESTION_IMAGE_WIDTH))
+                    except Exception:
+                        pass  # Skip images that fail to download
+
+                # Options
+                letters = ["A", "B", "C", "D"]
+                for i, opt in enumerate(q.get("options", [])):
+                    # Handle both string and OptionValue formats
+                    opt_text = opt if isinstance(opt, str) else opt.get("text", "")
+                    opt_image_url = None if isinstance(opt, str) else opt.get("image_url")
+
+                    # Option text
+                    opt_para = doc.add_paragraph(f"{letters[i]})  {opt_text}")
+                    opt_para.paragraph_format.left_indent = Inches(0.3)
+
+                    # Option image
+                    if opt_image_url:
+                        try:
+                            if opt_image_url not in image_cache:
+                                resp = await client.get(opt_image_url)
+                                if resp.status_code == 200:
+                                    image_cache[opt_image_url] = resp.content
+
+                            if opt_image_url in image_cache:
+                                img_bytes = BytesIO(image_cache[opt_image_url])
+                                doc.add_picture(img_bytes, width=Inches(OPTION_IMAGE_WIDTH))
+                        except Exception:
+                            pass  # Skip images that fail to download
+
+    # Write to BytesIO
+    output = BytesIO()
+    doc.save(output)
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename={paper_name}.docx"}
+    )
