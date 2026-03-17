@@ -3,13 +3,14 @@
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
-import { FileDown, FileText, Loader2, Plus } from "lucide-react";
+import { FileDown, FileText, Loader2, Plus, Trash2 } from "lucide-react";
 import { API } from "@/lib/config";
 
 interface Paper {
   id: number;
   name: string;
   total_marks: number;
+  in_use: boolean;
 }
 
 async function downloadDoc(paperId: number, paperName: string, token: string) {
@@ -70,6 +71,7 @@ export default function PapersPage() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     const token = getCookie("wfl-session") as string | undefined;
@@ -88,6 +90,25 @@ export default function PapersPage() {
     setDownloadingId(paper.id);
     await downloadDoc(paper.id, paper.name, token).catch(() => {});
     setDownloadingId(null);
+  };
+
+  const handleDelete = async (paper: Paper) => {
+    if (!window.confirm(`Delete "${paper.name}"? This cannot be undone.`)) return;
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) return;
+    setDeletingId(paper.id);
+    const res = await fetch(`${API}/paper/${paper.id}`, {
+      method: "DELETE",
+      headers: { "x-session-token": token },
+    }).catch(() => null);
+    setDeletingId(null);
+    if (!res) { alert("Network error — could not reach server."); return; }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert(body.detail ?? `Delete failed (${res.status})`);
+      return;
+    }
+    setPapers(prev => prev.filter(p => p.id !== paper.id));
   };
 
   if (loading) {
@@ -169,6 +190,16 @@ export default function PapersPage() {
                 >
                   Schedule exam
                 </Link>
+                <button
+                  onClick={() => handleDelete(paper)}
+                  disabled={paper.in_use || deletingId === paper.id}
+                  title={paper.in_use ? "In use by an exam — cannot delete" : "Delete paper"}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg border border-zinc-700 text-zinc-600 hover:text-red-400 hover:border-red-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {deletingId === paper.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </div>
           ))}

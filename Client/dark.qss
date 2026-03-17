@@ -107,6 +107,24 @@ QPushButton#OptionButton:hover {
     border-color: #3f3f46;
 }
 
+/* Frame-based option (used when question/option has an image) */
+QFrame#OptionButton {
+    border-radius: 8px;
+    border: 1px solid #27272a;
+    background-color: #18181b;
+}
+
+QFrame#OptionButton:hover {
+    background-color: #1f1f23;
+    border-color: #3f3f46;
+}
+
+QLabel#OptionText {
+    font-size: 25px;
+    color: #e4e4e7;
+    background-color: transparent;
+}
+
 /* ── Nav panel ────────────────────────────────────────── */
 QLabel#NavSectionLabel {
     font-size: 11px;

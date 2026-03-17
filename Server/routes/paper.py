@@ -1,11 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from starlette.status import HTTP_201_CREATED, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT
 
 from deps import get_current_user
 from models import QuestionPaper
-from supa import db
+from supa import db, db_url
 
 router = APIRouter()
+
+
+def collect_image_urls(questions_dict: dict) -> set[str]:
+    """Extract every image_url from a questions JSON blob."""
+    urls: set[str] = set()
+    for section in questions_dict.get("sections", []):
+        for q in section.get("questions", []):
+            if q.get("image_url"):
+                urls.add(q["image_url"])
+            for opt in q.get("options", []):
+                if isinstance(opt, dict) and opt.get("image_url"):
+                    urls.add(opt["image_url"])
+    return urls
 
 
 @router.post("/paper/create", status_code=HTTP_201_CREATED)
@@ -23,6 +38,15 @@ async def listPapers(user=Depends(get_current_user)):
         .eq("creator_id", user["id"]) \
         .execute()
 
+    paper_ids = [p["id"] for p in response.data]
+    in_use_ids: set[int] = set()
+    if paper_ids:
+        exam_res = await db.client.table("Exams") \
+            .select("questionpaper_id") \
+            .in_("questionpaper_id", paper_ids) \
+            .execute()
+        in_use_ids = {row["questionpaper_id"] for row in exam_res.data}
+
     papers = []
     for p in response.data:
         q = p["questions"]
@@ -36,6 +60,7 @@ async def listPapers(user=Depends(get_current_user)):
             "id": p["id"],
             "name": meta.get("exam_name") or f"Paper #{p['id']}",
             "total_marks": total_marks,
+            "in_use": p["id"] in in_use_ids,
         })
 
     return {"papers": papers}
@@ -65,7 +90,7 @@ async def getPaper(paper_id: int, user=Depends(get_current_user)):
 @router.put("/paper/{paper_id}")
 async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_current_user)):
     existing = await db.client.table("QuestionPapers") \
-        .select("id") \
+        .select("id,questions") \
         .eq("id", paper_id) \
         .eq("creator_id", user["id"]) \
         .execute()
@@ -80,9 +105,51 @@ async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_curr
     if exam_res.data:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Paper is in use by an exam.")
 
+    # Delete images that were removed in this update
+    old_urls = collect_image_urls(existing.data[0].get("questions") or {})
+    new_urls = collect_image_urls(paper.questions)
+    orphaned = old_urls - new_urls
+    if orphaned:
+        keys = [url.split("/question-images/", 1)[-1] for url in orphaned]
+        try:
+            await db.client.storage.from_("question-images").remove(keys)
+        except Exception:
+            pass  # cleanup is best-effort; don't fail the save
+
     data = paper.model_dump(exclude={"id", "creator_id"})
     await db.client.table("QuestionPapers").update(data).eq("id", paper_id).execute()
     return {"msg": "Paper updated"}
+
+
+@router.delete("/paper/{paper_id}")
+async def deletePaper(paper_id: int, user=Depends(get_current_user)):
+    existing = await db.client.table("QuestionPapers") \
+        .select("id,questions") \
+        .eq("id", paper_id) \
+        .eq("creator_id", user["id"]) \
+        .execute()
+    if not existing.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
+
+    exam_res = await db.client.table("Exams") \
+        .select("id") \
+        .eq("questionpaper_id", paper_id) \
+        .limit(1) \
+        .execute()
+    if exam_res.data:
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Paper is in use by an exam and cannot be deleted.")
+
+    # Delete all images belonging to this paper
+    image_urls = collect_image_urls(existing.data[0].get("questions") or {})
+    if image_urls:
+        keys = [url.split("/question-images/", 1)[-1] for url in image_urls]
+        try:
+            await db.client.storage.from_("question-images").remove(keys)
+        except Exception:
+            pass  # best-effort
+
+    await db.client.table("QuestionPapers").delete().eq("id", paper_id).execute()
+    return {"msg": "Paper deleted"}
 
 
 @router.post("/paper/{paper_id}/clone", status_code=HTTP_201_CREATED)
@@ -107,3 +174,17 @@ async def clonePaper(paper_id: int, user=Depends(get_current_user)):
         "creator_id": user["id"],
     }).execute()
     return {"msg": "Paper cloned", "id": result.data[0]["id"]}
+
+
+ALLOWED_IMAGE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
+
+@router.post("/paper/upload-image")
+async def uploadImage(file: UploadFile = File(...), user=Depends(get_current_user)):
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid image type. Allowed: png, jpg, jpeg, gif, webp.")
+    key = f"{uuid4()}.{ext}"
+    data = await file.read()
+    await db.client.storage.from_("question-images").upload(key, data, {"content-type": file.content_type})
+    url = f"{db_url}/storage/v1/object/public/question-images/{key}"
+    return {"url": url}

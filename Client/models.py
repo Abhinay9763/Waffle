@@ -1,13 +1,23 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
+
+class OptionValue(BaseModel):
+    text: str = ""
+    image_url: str | None = None
 
 class Question(BaseModel):
     question_id : int
     text : str
-    options : list[str]
+    image_url : str | None = None
+    options : list[OptionValue]
     correct_option : int = -1  # not sent to client; server scores server-side
     marks : int
     negative_marks : int
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def coerce_options(cls, v):
+        return [{"text": o} if isinstance(o, str) else o for o in v]
 
 class Section(BaseModel):
     section_id : int

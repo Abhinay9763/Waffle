@@ -5,17 +5,23 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, ChevronLeft, ChevronRight,
-  Save, X, GripVertical, Loader2, Copy, Lock, Mic,
+  Save, X, GripVertical, Loader2, Copy, Lock, Mic, ImagePlus,
 } from "lucide-react";
 import { getCookie } from "cookies-next";
 import { API } from "@/lib/config";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+interface OptionValue {
+  text: string;
+  image_url?: string;
+}
+
 interface BuilderQuestion {
   question_id: number;
   text: string;
-  options: [string, string, string, string];
+  image_url?: string;
+  options: [OptionValue, OptionValue, OptionValue, OptionValue];
   correct_option: number | null;
   marks: number;
   negative_marks: number;
@@ -49,7 +55,9 @@ type Action =
   | { type: "UPDATE_OPTION"; idx: number; text: string }
   | { type: "SET_CORRECT"; idx: number }
   | { type: "UPDATE_MARKS"; marks: number }
-  | { type: "UPDATE_NEG_MARKS"; neg: number };
+  | { type: "UPDATE_NEG_MARKS"; neg: number }
+  | { type: "SET_QUESTION_IMAGE"; url: string | undefined }
+  | { type: "SET_OPTION_IMAGE"; optIdx: 0 | 1 | 2 | 3; url: string | undefined };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -81,16 +89,16 @@ function getDisplayIndex(sections: BuilderSection[], qId: number): number {
 }
 
 function questionStatus(q: BuilderQuestion): "complete" | "partial" | "empty" {
-  const hasText = q.text.trim().length > 0;
-  const allOpts = q.options.every(o => o.trim().length > 0);
+  const hasText = q.text.trim().length > 0 || !!q.image_url;
+  const allOpts = q.options.every(o => o.text.trim().length > 0 || !!o.image_url);
   const hasCorrect = q.correct_option !== null;
   if (hasText && allOpts && hasCorrect) return "complete";
-  if (hasText || q.options.some(o => o.trim().length > 0)) return "partial";
+  if (hasText || q.options.some(o => o.text.trim().length > 0 || !!o.image_url)) return "partial";
   return "empty";
 }
 
 function makeQ(id: number): BuilderQuestion {
-  return { question_id: id, text: "", options: ["", "", "", ""], correct_option: null, marks: 1, negative_marks: 0 };
+  return { question_id: id, text: "", options: [{ text: "" }, { text: "" }, { text: "" }, { text: "" }], correct_option: null, marks: 1, negative_marks: 0 };
 }
 
 // ── Reducer ────────────────────────────────────────────────────────────────────
@@ -179,8 +187,18 @@ function reducer(state: BuilderState, action: Action): BuilderState {
 
     case "UPDATE_OPTION":
       return updateQ(state, q => {
-        const opts = [...q.options] as [string, string, string, string];
-        opts[action.idx] = action.text;
+        const opts = [...q.options] as [OptionValue, OptionValue, OptionValue, OptionValue];
+        opts[action.idx] = { ...opts[action.idx], text: action.text };
+        return { ...q, options: opts };
+      });
+
+    case "SET_QUESTION_IMAGE":
+      return updateQ(state, q => ({ ...q, image_url: action.url }));
+
+    case "SET_OPTION_IMAGE":
+      return updateQ(state, q => {
+        const opts = [...q.options] as [OptionValue, OptionValue, OptionValue, OptionValue];
+        opts[action.optIdx] = { ...opts[action.optIdx], image_url: action.url };
         return { ...q, options: opts };
       });
 
@@ -238,10 +256,12 @@ function buildInitialState(initialData?: InitialPaperData): BuilderState {
   const sections: BuilderSection[] = initialData.sections.map(s => ({
     ...s,
     questions: s.questions.map(q => ({
-      ...q,
-      options: q.options as [string, string, string, string],
-      correct_option: initialData.answers[String(q.question_id)] ?? null,
-    })),
+        ...q,
+        options: (q.options as Array<string | OptionValue>).map(o =>
+          typeof o === "string" ? { text: o } : o
+        ) as [OptionValue, OptionValue, OptionValue, OptionValue],
+        correct_option: initialData.answers[String(q.question_id)] ?? null,
+      })),
   }));
   const allQIds = sections.flatMap(s => s.questions.map(q => q.question_id));
   const allSIds = sections.map(s => s.section_id);
@@ -257,11 +277,15 @@ function buildInitialState(initialData?: InitialPaperData): BuilderState {
 // ── Option row ─────────────────────────────────────────────────────────────────
 
 function OptionRow({
-  letter, value, isCorrect, onChange, onMarkCorrect, readonly, optIdx,
+  letter, value, isCorrect, onChange, onMarkCorrect, onUploadImage, onRemoveImage, uploading, readonly, optIdx,
 }: {
-  letter: string; value: string; isCorrect: boolean; readonly?: boolean;
-  onChange: (v: string) => void; onMarkCorrect: () => void; optIdx: number;
+  letter: string; value: OptionValue; isCorrect: boolean; readonly?: boolean;
+  onChange: (v: string) => void; onMarkCorrect: () => void;
+  onUploadImage: (file: File) => Promise<void>; onRemoveImage: () => void;
+  uploading: boolean; optIdx: number;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
   return (
     <div
       className={`
@@ -279,20 +303,60 @@ function OptionRow({
         {letter}
       </span>
 
-      <textarea
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={`Option ${letter}`}
-        rows={1}
-        readOnly={readonly}
-        data-stt-field={`option-${optIdx}`}
-        onInput={e => {
-          const el = e.currentTarget;
-          el.style.height = "auto";
-          el.style.height = `${el.scrollHeight}px`;
-        }}
-        className="flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 resize-none outline-none leading-relaxed min-h-[28px] read-only:cursor-default"
-      />
+      <div className="flex-1 flex flex-col gap-2 min-w-0">
+        <textarea
+          value={value.text}
+          onChange={e => onChange(e.target.value)}
+          placeholder={`Option ${letter}`}
+          rows={1}
+          readOnly={readonly}
+          data-stt-field={`option-${optIdx}`}
+          onInput={e => {
+            const el = e.currentTarget;
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }}
+          className="bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 resize-none outline-none leading-relaxed min-h-[28px] read-only:cursor-default"
+        />
+        {value.image_url && (
+          <div className="relative inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={value.image_url} alt="" className="max-h-32 rounded-lg border border-zinc-700 object-contain" />
+            {!readonly && (
+              <button
+                type="button"
+                onClick={onRemoveImage}
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-zinc-900/80 border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-red-400 transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
+        {!readonly && !value.image_url && (
+          <>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="self-start flex items-center gap-1 text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-50"
+            >
+              {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
+              {uploading ? "Uploading…" : "Add image"}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async e => {
+                const file = e.target.files?.[0];
+                if (file) { e.target.value = ""; await onUploadImage(file); }
+              }}
+            />
+          </>
+        )}
+      </div>
 
       <button
         type="button"
@@ -314,11 +378,18 @@ function OptionRow({
 // ── Question editor ────────────────────────────────────────────────────────────
 
 function QuestionEditor({
-  q, displayIdx, total, dispatch, readonly,
+  q, displayIdx, total, dispatch, readonly, onUploadQImage, onRemoveQImage, onUploadOptImage, onRemoveOptImage, uploadingSlot,
 }: {
   q: BuilderQuestion; displayIdx: number; total: number;
   dispatch: React.Dispatch<Action>; readonly?: boolean;
+  onUploadQImage: (file: File) => Promise<void>;
+  onRemoveQImage: () => void;
+  onUploadOptImage: (idx: number, file: File) => Promise<void>;
+  onRemoveOptImage: (idx: number) => void;
+  uploadingSlot: string | null;
 }) {
+  const qImgRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="flex flex-col gap-7 flex-1 overflow-y-auto p-8">
 
@@ -361,6 +432,45 @@ function QuestionEditor({
             el.style.height = `${el.scrollHeight}px`;
           }}
         />
+
+        {/* Question image */}
+        {q.image_url ? (
+          <div className="relative inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={q.image_url} alt="" className="max-h-56 rounded-xl border border-zinc-700 object-contain" />
+            {!readonly && (
+              <button
+                type="button"
+                onClick={onRemoveQImage}
+                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-zinc-900/80 border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-red-400 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        ) : !readonly && (
+          <>
+            <button
+              type="button"
+              onClick={() => qImgRef.current?.click()}
+              disabled={uploadingSlot === "q"}
+              className="self-start flex items-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-50"
+            >
+              {uploadingSlot === "q" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+              {uploadingSlot === "q" ? "Uploading…" : "Add image"}
+            </button>
+            <input
+              ref={qImgRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async e => {
+                const file = e.target.files?.[0];
+                if (file) { e.target.value = ""; await onUploadQImage(file); }
+              }}
+            />
+          </>
+        )}
       </div>
 
       {/* Options */}
@@ -377,6 +487,9 @@ function QuestionEditor({
             isCorrect={q.correct_option === idx}
             onChange={text => dispatch({ type: "UPDATE_OPTION", idx, text })}
             onMarkCorrect={() => dispatch({ type: "SET_CORRECT", idx })}
+            onUploadImage={(file) => onUploadOptImage(idx, file)}
+            onRemoveImage={() => onRemoveOptImage(idx)}
+            uploading={uploadingSlot === `o-${idx}`}
             readonly={readonly}
           />
         ))}
@@ -558,6 +671,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [cloning, setCloning] = useState(false);
+  const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
 
   // ── Speech-to-text ──────────────────────────────────────────────────────
   const [sttActive, setSttActive] = useState(false);
@@ -611,7 +725,41 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
     srRef.current = r;
     try { r.start(); setSttActive(true); } catch { setSttActive(false); }
   };
-  // ── End speech-to-text ──────────────────────────────────────────────────
+  // ── End speech-to-text ──────────────────────────────────────────
+
+  // ── Image upload ────────────────────────────────────────────────
+  const uploadImage = async (file: File): Promise<string> => {
+    const token = getCookie("wfl-session") as string | undefined;
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${API}/paper/upload-image`, {
+      method: "POST",
+      headers: { "x-session-token": token ?? "" },
+      body: fd,
+    });
+    if (!res.ok) throw new Error("Upload failed");
+    const { url } = await res.json();
+    return url;
+  };
+
+  const handleUploadQImage = async (file: File) => {
+    setUploadingSlot("q");
+    try {
+      const url = await uploadImage(file);
+      dispatch({ type: "SET_QUESTION_IMAGE", url });
+    } catch { setSaveError("Image upload failed."); }
+    setUploadingSlot(null);
+  };
+
+  const handleUploadOptImage = async (idx: number, file: File) => {
+    setUploadingSlot(`o-${idx}`);
+    try {
+      const url = await uploadImage(file);
+      dispatch({ type: "SET_OPTION_IMAGE", optIdx: idx as 0 | 1 | 2 | 3, url });
+    } catch { setSaveError("Image upload failed."); }
+    setUploadingSlot(null);
+  };
+  // ── End image upload ─────────────────────────────────────────────────────
 
   const flat = flatQuestions(state.sections);
   const activeQ = state.activeId ? findQuestion(state.sections, state.activeId) : null;
@@ -630,6 +778,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
         questions: s.questions.map(q => ({
           question_id: q.question_id,
           text: q.text,
+          image_url: q.image_url,
           options: q.options,
           marks: q.marks,
           negative_marks: q.negative_marks,
@@ -755,6 +904,11 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
             total={totalQ}
             dispatch={dispatch}
             readonly={inUse}
+            onUploadQImage={handleUploadQImage}
+            onRemoveQImage={() => dispatch({ type: "SET_QUESTION_IMAGE", url: undefined })}
+            onUploadOptImage={handleUploadOptImage}
+            onRemoveOptImage={(idx) => dispatch({ type: "SET_OPTION_IMAGE", optIdx: idx as 0 | 1 | 2 | 3, url: undefined })}
+            uploadingSlot={uploadingSlot}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-zinc-700 text-sm">

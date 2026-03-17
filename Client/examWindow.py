@@ -3,10 +3,11 @@ from datetime import timezone
 
 import httpx
 from PyQt6.QtCore import Qt, QEvent, QTimer, QThread, pyqtSignal
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QMainWindow, QApplication,
     QHBoxLayout, QVBoxLayout, QWidget, QLabel, QPushButton, QGridLayout, QScrollArea, QSizePolicy,
-    QSplitter, QMessageBox,
+    QSplitter, QMessageBox, QFrame,
 )
 from models import Exam, Question, QuestionResponse, Submission
 from config import API, APP_NAME
@@ -70,13 +71,29 @@ class HeartbeatWorker(QThread):
             pass  # best-effort — silently drop on failure
 
 
+# ── Clickable option widget (supports text + optional image) ──────────────────
+
+class ClickableOption(QFrame):
+    def __init__(self, callback, parent=None):
+        super().__init__(parent)
+        self._cb = callback
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setObjectName("OptionButton")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._cb()
+
+
 # ── Exam window ──────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
-    def __init__(self, exam: Exam, app: QApplication, token: str, on_complete):
+    def __init__(self, exam: Exam, app: QApplication, token: str, on_complete, image_cache: dict | None = None):
         super().__init__()
         self._token       = token
         self._on_complete = on_complete
+        self.image_cache: dict[str, QPixmap] = image_cache or {}
         self._dialog_open = False  # suppresses force_on_top while a dialog is shown
         self._submitting  = False  # prevents duplicate submissions
         self.app = app
@@ -480,11 +497,24 @@ class MainWindow(QMainWindow):
             child = self.question_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+
+        # Question text
         label = QLabel(str(question.question_id) + ". " + str(question.text))
         label.setObjectName("QuestionText")
         label.setWordWrap(True)
         label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.question_layout.addWidget(label)
+
+        # Question image
+        if question.image_url and question.image_url in self.image_cache:
+            img_label = QLabel()
+            px = self.image_cache[question.image_url].scaled(
+                800, 420, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+            )
+            img_label.setPixmap(px)
+            img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.question_layout.addWidget(img_label)
+
         self.current_question = question_id
         response = self.responses.get(self.current_question)
 
@@ -511,20 +541,46 @@ class MainWindow(QMainWindow):
             self.next_btn.setObjectName(new_name)
             self.next_btn.style().unpolish(self.next_btn)
             self.next_btn.style().polish(self.next_btn)
+
         option_labels = ("A", "B", "C", "D", "E", "F")
         for i, option in enumerate(question.options):
             letter = option_labels[i] if i < len(option_labels) else str(i + 1)
-            wrapped_text = self.wrap_option_text(letter, option)
-            btn = QPushButton(wrapped_text)
-            btn.setObjectName("OptionButton")
-            btn.setMinimumWidth(0)
-            if response and i == response.option:
-                btn.setStyleSheet("border: 2px solid #22c55e")
-            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            btn.clicked.connect(
-                lambda _, idx=i, q=self.current_question: self.answerQuestion(q, idx)
+
+            frame = ClickableOption(
+                callback=lambda _, idx=i, q=self.current_question: self.answerQuestion(q, idx)
             )
-            self.question_layout.addWidget(btn)
+            if response and i == response.option:
+                frame.setStyleSheet(
+                    "QFrame#OptionButton { border: 2px solid #22c55e; background-color: #18181b; border-radius: 8px; }"
+                )
+            frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+            frame_layout = QVBoxLayout(frame)
+            frame_layout.setContentsMargins(20, 14, 20, 14)
+            frame_layout.setSpacing(8)
+
+            # Option text
+            if option.text:
+                text_label = QLabel(self.wrap_option_text(letter, option.text))
+                text_label.setObjectName("OptionText")
+                text_label.setWordWrap(True)
+                frame_layout.addWidget(text_label)
+            else:
+                ltr_label = QLabel(f"{letter}.")
+                ltr_label.setObjectName("OptionText")
+                frame_layout.addWidget(ltr_label)
+
+            # Option image
+            if option.image_url and option.image_url in self.image_cache:
+                opt_img = QLabel()
+                opt_px = self.image_cache[option.image_url].scaled(
+                    500, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+                )
+                opt_img.setPixmap(opt_px)
+                opt_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                frame_layout.addWidget(opt_img)
+
+            self.question_layout.addWidget(frame)
 
     def closeEvent(self, a0):
         self.qTimer.stop()

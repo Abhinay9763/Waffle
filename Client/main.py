@@ -3,6 +3,7 @@ import traceback
 
 import httpx
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from loginWindow import LoginWindow
@@ -54,17 +55,40 @@ class ExamTakeWorker(QObject):
 
     def run(self):
         try:
-            with httpx.Client(timeout=10) as c:
+            with httpx.Client(timeout=30) as c:
                 r = c.get(f"{API}/exam/{self.exam_id}/take",
                           headers={"x-session-token": self.token})
-            if r.status_code == 200:
-                self.finished.emit(r.json())
-            else:
-                try:
-                    detail = r.json().get("detail", f"Server returned {r.status_code}.")
-                except Exception:
-                    detail = f"Server returned {r.status_code}."
-                self.error.emit(detail)
+                if r.status_code != 200:
+                    try:
+                        detail = r.json().get("detail", f"Server returned {r.status_code}.")
+                    except Exception:
+                        detail = f"Server returned {r.status_code}."
+                    self.error.emit(detail)
+                    return
+                data = r.json()
+
+                # Collect all image URLs from questions and options
+                image_urls: set[str] = set()
+                for section in data.get("sections", []):
+                    for q in section.get("questions", []):
+                        if q.get("image_url"):
+                            image_urls.add(q["image_url"])
+                        for opt in q.get("options", []):
+                            if isinstance(opt, dict) and opt.get("image_url"):
+                                image_urls.add(opt["image_url"])
+
+                # Download raw bytes for each image
+                image_bytes: dict[str, bytes] = {}
+                for url in image_urls:
+                    try:
+                        img_r = c.get(url, timeout=15)
+                        if img_r.status_code == 200:
+                            image_bytes[url] = img_r.content
+                    except Exception:
+                        pass  # skip failed images silently
+
+                data["_images"] = image_bytes
+                self.finished.emit(data)
         except Exception as e:
             msg = str(e).lower()
             if any(w in msg for w in ("connect", "refused", "network", "timeout", "unreachable")):
@@ -134,6 +158,14 @@ def show_exam(exam_id: int):
 
 
 def _open_exam(data: dict):
+    # Build QPixmap cache in the main thread (QPixmap is not thread-safe)
+    raw_images: dict[str, bytes] = data.pop("_images", {})
+    image_cache: dict[str, QPixmap] = {}
+    for url, raw in raw_images.items():
+        px = QPixmap()
+        if px.loadFromData(raw) and not px.isNull():
+            image_cache[url] = px
+
     try:
         exam = Exam(**data)
     except Exception as e:
@@ -142,7 +174,7 @@ def _open_exam(data: dict):
     for key in ("dashboard", "countdown"):
         if key in _windows:
             _windows[key].hide()
-    w = MainWindow(exam, app, _token, _on_exam_complete)
+    w = MainWindow(exam, app, _token, _on_exam_complete, image_cache)
     _windows["exam"] = w
 
 
