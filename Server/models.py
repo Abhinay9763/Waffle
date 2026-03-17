@@ -5,13 +5,16 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-
-
 class Role(str,Enum):
     hod = "HOD"
     faculty = "Faculty"
     student = "Student"
     admin = "Admin"
+
+class ApprovalStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
 
 class Register(BaseModel):
     name : str

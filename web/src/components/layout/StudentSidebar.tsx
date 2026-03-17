@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Clock, BarChart2, LogOut } from "lucide-react";
+import { LayoutDashboard, Clock, BarChart2, LogOut, Loader2 } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
@@ -18,28 +18,72 @@ export default function StudentSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; roll: string } | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
 
   useEffect(() => {
-    const raw = getCookie("wfl-user") as string | undefined;
-    setUser(raw ? JSON.parse(raw) : null);
+    const validateSession = async () => {
+      const token = getCookie("wfl-session") as string | undefined;
+      const raw = getCookie("wfl-user") as string | undefined;
 
-    const token = getCookie("wfl-session") as string | undefined;
-    if (!token) return;
-    fetch(`${API}/user/session`, { headers: { "x-session-token": token } })
-      .then((r) => {
-        if (r.status === 401) {
+      // No token = redirect to login immediately
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API}/user/session`, {
+          headers: { "x-session-token": token }
+        });
+
+        if (!response.ok) {
+          // Session invalid
           deleteCookie("wfl-session");
           deleteCookie("wfl-user");
           router.replace("/login?expired=1");
+          return;
         }
-      })
-      .catch(() => {});
-  }, []);
+
+        const sessionData = await response.json();
+
+        // Verify this is actually a Student user
+        if (sessionData.user?.role !== "Student") {
+          deleteCookie("wfl-session");
+          deleteCookie("wfl-user");
+          router.replace("/login");
+          return;
+        }
+
+        // Auth successful - set user and stop loading
+        setUser(raw ? JSON.parse(raw) : sessionData.user);
+        setIsAuthenticating(false);
+
+      } catch (error) {
+        // Network error or other issue
+        deleteCookie("wfl-session");
+        deleteCookie("wfl-user");
+        router.replace("/login");
+      }
+    };
+
+    validateSession();
+  }, [router]);
 
   function signOut() {
     deleteCookie("wfl-session");
     deleteCookie("wfl-user");
     router.replace("/login");
+  }
+
+  // Show loading state while authenticating
+  if (isAuthenticating) {
+    return (
+      <aside className="flex flex-col w-56 h-screen bg-zinc-900 border-r border-zinc-800 shrink-0">
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="w-6 h-6 animate-spin text-zinc-600" />
+        </div>
+      </aside>
+    );
   }
 
   return (

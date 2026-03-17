@@ -10,7 +10,7 @@ from starlette.status import (
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
 
-from models import Register, Login, Role, Session
+from models import Register, Login, Role, Session, ApprovalStatus
 from supa import db
 from utils import hashPassword, verifyPassword, serializer, send_auth_mail, createSessionToken
 from deps import get_current_user
@@ -73,8 +73,21 @@ async def activateMail(token : str):
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Account already activated.")
 
     user.password = hashPassword(user.password)
-    await db.client.table("Users").insert(user.model_dump()).execute()
-    return {"msg": "created User"}
+
+    # Set approval status based on role
+    user_data = user.model_dump()
+    if user.role == Role.faculty:
+        user_data["approval_status"] = ApprovalStatus.pending
+    else:
+        # Students, Admin, HOD are auto-approved
+        user_data["approval_status"] = ApprovalStatus.approved
+
+    await db.client.table("Users").insert(user_data).execute()
+    return {
+        "msg": "created User",
+        "role": user.role.value if user.role else None,
+        "approval_status": user_data["approval_status"]
+    }
 
 
 @router.get("/user/session", status_code=HTTP_200_OK)
@@ -84,29 +97,83 @@ async def getSession(user=Depends(get_current_user)):
 
 @router.post("/user/login",status_code=HTTP_200_OK)
 async def loginUser(user : Login):
-    response = await db.client.table("Users").select("id,password").eq("email",user.email).execute()
+    response = await db.client.table("Users").select("id,password,role,approval_status").eq("email",user.email).execute()
     if not response.data:
         raise HTTPException(
             status_code=HTTP_404_NOT_FOUND,
             detail="User/Email does not exist"
         )
 
-    if verifyPassword(user.password,response.data[0]["password"]):
-        token = createSessionToken()
-        session = Session(
-            user_id=response.data[0]["id"],
-            expiry=datetime.now(timezone.utc) + timedelta(days=30),
-            token= token,
-            ).model_dump()
-        session["expiry"] = session["expiry"].isoformat()
-        res = await db.client.table("Sessions").upsert(session,on_conflict="user_id").execute()
-        if res.data:
-            return {"msg" : "User Authentication Successful!","token" : token}
+    user_data = response.data[0]
+    if not verifyPassword(user.password, user_data["password"]):
         raise HTTPException(
-            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="session creation failed"
+            status_code=HTTP_401_UNAUTHORIZED,
+            detail="Invalid password"
         )
+
+    # Check approval status for faculty
+    if user_data.get("approval_status") == "pending":
+        raise HTTPException(
+            status_code=HTTP_401_UNAUTHORIZED,
+            detail="Your account is pending approval by the Head of Department."
+        )
+    elif user_data.get("approval_status") == "rejected":
+        raise HTTPException(
+            status_code=HTTP_401_UNAUTHORIZED,
+            detail="Your account has been rejected. Please contact the Head of Department."
+        )
+
+    token = createSessionToken()
+    session = Session(
+        user_id=user_data["id"],
+        expiry=datetime.now(timezone.utc) + timedelta(days=30),
+        token= token,
+        ).model_dump()
+    session["expiry"] = session["expiry"].isoformat()
+    res = await db.client.table("Sessions").upsert(session,on_conflict="user_id").execute()
+    if res.data:
+        return {"msg" : "User Authentication Successful!","token" : token}
     raise HTTPException(
-        status_code=HTTP_401_UNAUTHORIZED,
-        detail="Invalid password"
+        status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="session creation failed"
     )
+
+
+# HOD-specific routes
+@router.get("/hod/pending-faculty")
+async def getPendingFaculty(user=Depends(get_current_user)):
+    if user["role"] != "HOD":
+        raise HTTPException(status_code=403, detail="Only HOD can access this resource")
+
+    response = await db.client.table("Users").select("id,name,email,role,created_at").eq("role", "Faculty").eq("approval_status", "pending").execute()
+    return {"pending_faculty": response.data}
+
+
+@router.post("/hod/approve-faculty/{user_id}")
+async def approveFaculty(user_id: int, user=Depends(get_current_user)):
+    if user["role"] != "HOD":
+        raise HTTPException(status_code=403, detail="Only HOD can perform this action")
+
+    # Check if user exists and is faculty
+    faculty_res = await db.client.table("Users").select("id,role").eq("id", user_id).eq("role", "Faculty").execute()
+    if not faculty_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Faculty member not found")
+
+    # Update approval status
+    await db.client.table("Users").update({"approval_status": "approved"}).eq("id", user_id).execute()
+    return {"msg": "Faculty approved successfully"}
+
+
+@router.post("/hod/reject-faculty/{user_id}")
+async def rejectFaculty(user_id: int, user=Depends(get_current_user)):
+    if user["role"] != "HOD":
+        raise HTTPException(status_code=403, detail="Only HOD can perform this action")
+
+    # Check if user exists and is faculty
+    faculty_res = await db.client.table("Users").select("id,role").eq("id", user_id).eq("role", "Faculty").execute()
+    if not faculty_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Faculty member not found")
+
+    # Update approval status
+    await db.client.table("Users").update({"approval_status": "rejected"}).eq("id", user_id).execute()
+    return {"msg": "Faculty rejected"}

@@ -87,7 +87,14 @@ export default function LoginForm() {
     setCookie("wfl-session", token, { expires, sameSite: "strict" });
     setCookie("wfl-user", JSON.stringify({ name: user.name, roll: user.roll, role: user.role }), { expires, sameSite: "strict" });
 
-    router.replace(user.role === "Student" ? "/student" : "/faculty");
+    // Role-based routing
+    if (user.role === "Student") {
+      router.replace("/student");
+    } else if (user.role === "HOD") {
+      router.replace("/hod/hod");
+    } else {
+      router.replace("/faculty");
+    }
   };
 
   return (

@@ -8,7 +8,7 @@ from supa import db
 
 async def get_current_user(x_session_token: str = Header()):
     response = await db.client.table("Sessions") \
-        .select("expiry,Users(id,name,roll,role)") \
+        .select("expiry,Users(id,name,roll,role,approval_status)") \
         .eq("token", x_session_token) \
         .execute()
 
@@ -25,4 +25,18 @@ async def get_current_user(x_session_token: str = Header()):
             detail="Session expired. Please sign in again.",
         )
 
-    return response.data[0]["Users"]
+    user = response.data[0]["Users"]
+
+    # Check if user is approved (faculty need approval, others are auto-approved)
+    if user.get("approval_status") == "pending":
+        raise HTTPException(
+            status_code=HTTP_401_UNAUTHORIZED,
+            detail="Your account is pending approval by the Head of Department.",
+        )
+    elif user.get("approval_status") == "rejected":
+        raise HTTPException(
+            status_code=HTTP_401_UNAUTHORIZED,
+            detail="Your account has been rejected. Please contact the Head of Department.",
+        )
+
+    return user

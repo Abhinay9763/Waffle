@@ -3,19 +3,20 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FileText, CalendarDays, BarChart2, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, FileText, CalendarDays, BarChart2, LogOut, Loader2 } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
 
 const NAV = [
-  { label: "Dashboard",        href: "/faculty",   icon: LayoutDashboard },
-  { label: "Question Papers",  href: "/papers",    icon: FileText },
-  { label: "Exams",            href: "/exams",     icon: CalendarDays },
-  { label: "Results",          href: "/responses", icon: BarChart2 },
+  { label: "Dashboard",        href: "/hod/hod",       icon: LayoutDashboard },
+  { label: "Faculty Approvals", href: "/hod/approvals", icon: Users },
+  { label: "Question Papers",  href: "/papers",        icon: FileText },
+  { label: "Exams",            href: "/exams",         icon: CalendarDays },
+  { label: "Results",          href: "/responses",     icon: BarChart2 },
 ];
 
-export default function FacultySidebar() {
+export default function HODSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; roll: string } | null>(null);
@@ -47,8 +48,8 @@ export default function FacultySidebar() {
 
         const sessionData = await response.json();
 
-        // Verify this is actually a Faculty user with approved status
-        if (sessionData.user?.role !== "Faculty") {
+        // Verify this is actually an HOD user
+        if (sessionData.user?.role !== "HOD") {
           deleteCookie("wfl-session");
           deleteCookie("wfl-user");
           router.replace("/login");
@@ -92,53 +93,57 @@ export default function FacultySidebar() {
 
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 h-20 border-b border-zinc-800 shrink-0">
-        <span className="text-yellow-400">
-          <WaffleLogo size={72} />
-        </span>
-        <span className="text-lg font-semibold text-zinc-100 tracking-tight">{APP_NAME}</span>
-        <span className="ml-auto text-[10px] font-medium text-purple-400 border border-purple-800/50 bg-purple-950/30 rounded px-1.5 py-0.5">
-          FACULTY
-        </span>
+        <WaffleLogo className="h-14 w-14" />
+        <div className="space-y-0.5">
+          <div className="text-lg font-medium text-zinc-100">{APP_NAME}</div>
+          <div className="text-xs text-yellow-400 font-medium">HEAD OF DEPARTMENT</div>
+        </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`
-                flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                ${active
-                  ? "bg-yellow-500/10 text-yellow-300 border border-yellow-700/40"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-                }
-              `}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              {label}
-            </Link>
-          );
-        })}
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-6">
+        <ul className="px-4 space-y-1">
+          {NAV.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                    isActive
+                      ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                  }`}
+                >
+                  <item.icon className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
 
-      {/* User footer */}
-      <div className="px-3 py-3 border-t border-zinc-800 space-y-0.5 shrink-0">
-        <div className="px-3 py-2 rounded-lg">
-          <p className="text-xs font-medium text-zinc-300 truncate">{user?.name ?? "Faculty"}</p>
-          <p className="text-[11px] text-zinc-600 truncate">{user?.roll ?? ""}</p>
+      {/* User */}
+      <div className="border-t border-zinc-800 p-4 shrink-0">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-zinc-200 truncate">
+              {user?.name || "HOD"}
+            </div>
+            <div className="text-xs text-zinc-500 truncate">
+              {user?.roll || ""}
+            </div>
+          </div>
         </div>
         <button
           onClick={signOut}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+          className="flex items-center gap-2 w-full text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
         >
-          <LogOut className="w-4 h-4 shrink-0" />
+          <LogOut className="w-3.5 h-3.5" />
           Sign out
         </button>
       </div>
-
     </aside>
   );
 }
