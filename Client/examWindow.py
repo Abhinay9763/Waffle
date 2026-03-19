@@ -12,6 +12,15 @@ from PyQt6.QtWidgets import (
 from models import Exam, Question, QuestionResponse, Submission
 from config import API, APP_NAME
 
+# Optional blind mode import - gracefully handle if dependencies not installed
+try:
+    from blind_mode import BlindModeManager
+    BLIND_MODE_AVAILABLE = True
+except ImportError as e:
+    print(f"Blind mode not available: {e}")
+    BLIND_MODE_AVAILABLE = False
+    BlindModeManager = None
+
 
 # ── Submit worker ────────────────────────────────────────────────────────────
 
@@ -115,6 +124,17 @@ class MainWindow(QMainWindow):
         # Fire an initial heartbeat 2 s after the exam opens
         QTimer.singleShot(2000, self._send_heartbeat)
 
+        # Blind mode setup (only if dependencies available)
+        self.blind_mode_enabled = False
+        self.blind_mode = None
+        self.should_auto_speak_question = False  # Flag to control when to auto-speak questions
+        if BLIND_MODE_AVAILABLE:
+            self.blind_mode = BlindModeManager(parent=self)
+            self.blind_mode.command_recognized.connect(self._handle_blind_command)
+            self.blind_mode.speech_finished.connect(self._on_speech_finished)
+            self.blind_mode.listening_started.connect(self._show_listening_indicator)
+            self.blind_mode.listening_finished.connect(self._hide_listening_indicator)
+
         self.sections = exam.sections
         self.questions = [question
                           for section in self.sections
@@ -126,10 +146,10 @@ class MainWindow(QMainWindow):
 
         self.setObjectName("MainWindow")
 
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
+        # self.setWindowFlags(
+        #     Qt.WindowType.FramelessWindowHint
+        #     | Qt.WindowType.WindowStaysOnTopHint
+        # )
         self.setWindowTitle(APP_NAME)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
 
@@ -157,7 +177,21 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(student_info)
         top_layout.addStretch(1)
 
-        # Right: autosave indicator + timer
+        # Right: blind mode toggle (if available) + listening indicator + autosave indicator + timer
+        if BLIND_MODE_AVAILABLE:
+            self.blind_mode_btn = QPushButton("🎧 Enable Blind Mode")
+            self.blind_mode_btn.setObjectName("BlindModeButton")
+            self.blind_mode_btn.setCheckable(True)
+            self.blind_mode_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # Prevent button from stealing space bar
+            self.blind_mode_btn.clicked.connect(self._toggle_blind_mode)
+            top_layout.addWidget(self.blind_mode_btn)
+
+            # Listening indicator
+            self.listening_indicator = QLabel("🔴 Listening...")
+            self.listening_indicator.setObjectName("ListeningIndicator")
+            self.listening_indicator.setVisible(False)  # Hidden by default
+            top_layout.addWidget(self.listening_indicator)
+
         self._autosave_lbl = QLabel("")
         self._autosave_lbl.setObjectName("AutosaveLabel")
         top_layout.addWidget(self._autosave_lbl)
@@ -328,6 +362,10 @@ class MainWindow(QMainWindow):
         # self.apply_theme()
 
         self.showFullScreen()
+
+        # Play entrance sound effect to confirm exam has started (after a short delay)
+        if BLIND_MODE_AVAILABLE and self.blind_mode:
+            QTimer.singleShot(1000, self._play_entrance_sound)
 
     # def load_themes(self):
     #     styles_dir = Path(__file__).parent
@@ -582,10 +620,22 @@ class MainWindow(QMainWindow):
 
             self.question_layout.addWidget(frame)
 
+        # Auto-speak question in blind mode
+        if self.blind_mode_enabled and self.blind_mode:
+            self.blind_mode.speak_question(question, question_id + 1)
+
     def closeEvent(self, a0):
         self.qTimer.stop()
         self._hb_timer.stop()
         self._autosave_hide.stop()
+
+        # Cleanup blind mode aggressively
+        if self.blind_mode:
+            print("Cleaning up blind mode...")  # Debug output
+            self.blind_mode_enabled = False  # Disable immediately
+            self.blind_mode.cleanup()
+            print("Blind mode cleanup completed.")  # Debug output
+
         if not self._submitting:
             # Unexpected close — submit current state synchronously (best-effort).
             # Blocking call is intentional: threads can't be relied on during shutdown.
@@ -601,6 +651,37 @@ class MainWindow(QMainWindow):
                 pass
 
     def keyPressEvent(self, event):
+        # Space bar handling for blind mode
+        if event.key() == Qt.Key.Key_Space:
+            # If blind mode is not available, ignore
+            if not BLIND_MODE_AVAILABLE or not self.blind_mode:
+                return
+
+            # If blind mode is off, turn it on first
+            if not self.blind_mode_enabled:
+                self.blind_mode_btn.setChecked(True)
+                self._toggle_blind_mode()
+                # Remove focus from button to prevent future space presses from triggering it
+                self.blind_mode_btn.clearFocus()
+                self.setFocus()  # Set focus back to main window
+                return
+
+            # Blind mode is on - handle mic toggle
+            # Toggle behavior based on current state
+            if self.blind_mode.state.value == "speaking":
+                # If speaking, stop speech and start listening
+                self.blind_mode.stop_speaking()
+                # Give a brief moment for state transition, then start listening
+                QTimer.singleShot(100, self.blind_mode.listen)
+            elif self.blind_mode.state.value == "listening":
+                # If listening, stop listening
+                self.blind_mode.stop_listening()
+            elif self.blind_mode.state.value == "idle":
+                # If idle, start listening
+                self.blind_mode.listen()
+            # If processing, ignore (command is being processed)
+            return
+
         # Block all exit / OS-level shortcuts
         if event.key() in (Qt.Key.Key_Escape, Qt.Key.Key_F4,
                            Qt.Key.Key_Meta, Qt.Key.Key_Super_L, Qt.Key.Key_Super_R):
@@ -610,14 +691,17 @@ class MainWindow(QMainWindow):
             return
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             return  # block clipboard (Ctrl+C/V/X/A)
-        if event.key() == Qt.Key.Key_D:
-            self.switchQuestion(self.current_question + 1)
-        if event.key() == Qt.Key.Key_A:
-            self.switchQuestion(self.current_question - 1)
-        if event.key() == Qt.Key.Key_C:
-            self.clearQuestion(self.current_question)
-        if event.key() == Qt.Key.Key_Z:
-            self.markQuestion(self.current_question)
+
+        # Regular navigation shortcuts (only when blind mode is off)
+        if not self.blind_mode_enabled:
+            if event.key() == Qt.Key.Key_D:
+                self.switchQuestion(self.current_question + 1)
+            if event.key() == Qt.Key.Key_A:
+                self.switchQuestion(self.current_question - 1)
+            if event.key() == Qt.Key.Key_C:
+                self.clearQuestion(self.current_question)
+            if event.key() == Qt.Key.Key_Z:
+                self.markQuestion(self.current_question)
 
         super().keyPressEvent(event)
 
@@ -714,5 +798,218 @@ class MainWindow(QMainWindow):
         self._dialog_open = True
         dlg.exec()
         self._dialog_open = False
+
+    # ── Blind Mode methods ───────────────────────────────────────────────────
+
+    def _toggle_blind_mode(self):
+        """Toggle blind mode on/off"""
+        if not self.blind_mode:
+            return
+
+        self.blind_mode_enabled = self.blind_mode_btn.isChecked()
+
+        if self.blind_mode_enabled:
+            self.blind_mode_btn.setText("🎧 Blind Mode: ON")
+            # Ensure button doesn't have focus to prevent space bar interception
+            self.blind_mode_btn.clearFocus()
+            self.setFocus()  # Set focus back to main window
+            # Set flag to auto-speak question after intro finishes
+            self.should_auto_speak_question = True
+            # Announce blind mode activation
+            self.blind_mode.speak(
+                "Blind mode activated. Press space bar to give voice commands. "
+                "You can say: A, B, C, D to select an option. "
+                "Mark, to mark for review. "
+                "Next, to go to next question. "
+                "Previous, to go back. "
+                "Repeat, to hear the question again. "
+                "Clear, to clear your answer."
+            )
+        else:
+            self.blind_mode_btn.setText("🎧 Enable Blind Mode")
+            self.blind_mode.stop_speaking()
+
+    def _handle_blind_command(self, command: str):
+        """Handle voice commands in blind mode"""
+        print(f"🎮 Received blind command: {command}")  # Debug
+
+        if not self.blind_mode_enabled or not self.blind_mode:
+            print(f"🎮 Ignoring command - blind mode disabled")  # Debug
+            return
+
+        # Option selection
+        if command.startswith('OPTION_'):
+            option_letter = command.split('_')[1]
+            option_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5}
+            option_idx = option_map.get(option_letter)
+
+            if option_idx is not None and option_idx < len(self.questions[self.current_question].options):
+                # Check if this is the same option already selected
+                current_response = self.responses.get(self.current_question)
+                if current_response and current_response.option == option_idx:
+                    self.blind_mode.speak(f"Option {option_letter} already selected")
+                else:
+                    self.answerQuestion(self.current_question, option_idx)
+                    # Give confirmation with movement announcement
+                    if self.current_question < len(self.questions) - 1:
+                        self.blind_mode.speak(f"Selected Option {option_letter}. Moving to next question.")
+                        # Auto-advance after confirmation
+                        QTimer.singleShot(2000, lambda: self._delayed_next_question())
+                    else:
+                        self.blind_mode.speak(f"Selected Option {option_letter}. This is the last question.")
+                        QTimer.singleShot(1500, lambda: self._blind_mode_last_question_prompt())
+            else:
+                self.blind_mode.speak("Invalid option for this question.")
+
+        # Navigation
+        elif command == 'NEXT':
+            if self.current_question < len(self.questions) - 1:
+                self.switchQuestion(self.current_question + 1)
+                self.should_auto_speak_question = True  # Auto-speak after navigation
+                self.blind_mode.speak(f"Moved to question {self.current_question + 1}")
+            else:
+                # Last question - ask if they want to submit or go to unanswered
+                self.blind_mode.speak("Already at last question.")
+                QTimer.singleShot(1000, lambda: self._blind_mode_last_question_prompt())
+
+        elif command == 'PREV':
+            if self.current_question > 0:
+                self.switchQuestion(self.current_question - 1)
+                self.should_auto_speak_question = True  # Auto-speak after navigation
+                self.blind_mode.speak(f"Moved to question {self.current_question + 1}")
+            else:
+                self.blind_mode.speak("Already at first question.")
+
+        # Mark for review
+        elif command == 'MARK':
+            # Get current status before marking
+            current_response = self.responses.get(self.current_question)
+            was_marked = current_response and current_response.marked if current_response else False
+
+            self.markQuestion(self.current_question)
+
+            # Check new status after marking
+            updated_response = self.responses.get(self.current_question)
+            is_now_marked = updated_response and updated_response.marked if updated_response else False
+
+            if is_now_marked and not was_marked:
+                # Newly marked - give confirmation with movement
+                if self.current_question < len(self.questions) - 1:
+                    self.blind_mode.speak("Marked for review. Moving to next question.")
+                    QTimer.singleShot(2000, lambda: self._delayed_next_question())
+                else:
+                    self.blind_mode.speak("Marked for review. This is the last question.")
+                    QTimer.singleShot(1500, lambda: self._blind_mode_last_question_prompt())
+            elif not is_now_marked and was_marked:
+                self.blind_mode.speak("Review mark removed")
+            elif is_now_marked:
+                self.blind_mode.speak("Already marked for review")
+
+        # Repeat question
+        elif command == 'REPEAT':
+            # Directly speak the question without confirmation
+            current_q = self.questions[self.current_question]
+            self.blind_mode.speak_question(current_q, self.current_question + 1)
+
+        # Clear answer
+        elif command == 'CLEAR':
+            # Check if there was an answer to clear
+            current_response = self.responses.get(self.current_question)
+            if current_response and current_response.option is not None:
+                option_letter = ['A', 'B', 'C', 'D', 'E', 'F'][current_response.option]
+                self.clearQuestion(self.current_question)
+                self.blind_mode.speak(f"Option {option_letter} cleared")
+            else:
+                self.blind_mode.speak("No answer to clear for this question")
+
+        # Submit
+        elif command == 'SUBMIT':
+            self.blind_mode.speak("Preparing to submit exam")
+            self._confirm_submit()
+
+        # Go to unanswered
+        elif command == 'UNANSWERED':
+            self.blind_mode.speak("Searching for unanswered questions")
+            # Brief pause before executing the search
+            QTimer.singleShot(600, lambda: self._blind_mode_go_to_unanswered())
+
+    def _blind_mode_last_question_prompt(self):
+        """Prompt user when they reach the last question"""
+        if not self.blind_mode:
+            return
+
+        unanswered_count = sum(
+            1 for i in range(len(self.questions))
+            if self.responses.get(i) is None or self.responses[i].option is None
+        )
+
+        if unanswered_count > 0:
+            self.blind_mode.speak(
+                f"This is the last question. You have {unanswered_count} unanswered question{'s' if unanswered_count != 1 else ''}. "
+                "Say 'submit' to submit the exam, or say 'unanswered' to go to unanswered questions."
+            )
+        else:
+            self.blind_mode.speak(
+                "This is the last question. All questions answered. Say 'submit' to submit the exam."
+            )
+
+    def _delayed_next_question(self):
+        """Move to next question with automatic question reading"""
+        if self.current_question < len(self.questions) - 1:
+            self.switchQuestion(self.current_question + 1)
+        else:
+            # Already at last question, prompt user
+            self._blind_mode_last_question_prompt()
+
+    def _blind_mode_go_to_unanswered(self):
+        """Navigate to the first unanswered question"""
+        if not self.blind_mode:
+            return
+
+        for i in range(len(self.questions)):
+            response = self.responses.get(i)
+            if response is None or response.option is None:
+                self.switchQuestion(i)
+                self.should_auto_speak_question = True  # Auto-speak after navigation
+                self.blind_mode.speak(f"Moved to question {i + 1}, which is unanswered.")
+                return
+
+        # All answered
+        self.blind_mode.speak("All questions have been answered.")
+
+    def _on_speech_finished(self):
+        """Called when TTS finishes - auto-speak current question when flag is set"""
+        if not self.blind_mode or not self.blind_mode_enabled:
+            return
+
+        # Only auto-speak question if the flag is set (after navigation commands)
+        if self.should_auto_speak_question and not self.blind_mode.is_speaking:
+            self.should_auto_speak_question = False  # Reset flag
+            QTimer.singleShot(500, self._auto_speak_current_question)
+
+    def _auto_speak_current_question(self):
+        """Automatically speak the current question"""
+        if not self.blind_mode or not self.blind_mode_enabled:
+            return
+        # Don't speak if already speaking
+        if self.blind_mode.is_speaking:
+            return
+        current_q = self.questions[self.current_question]
+        self.blind_mode.speak_question(current_q, self.current_question + 1)
+
+    def _show_listening_indicator(self):
+        """Show the listening indicator"""
+        if BLIND_MODE_AVAILABLE and hasattr(self, 'listening_indicator'):
+            self.listening_indicator.setVisible(True)
+
+    def _hide_listening_indicator(self):
+        """Hide the listening indicator"""
+        if BLIND_MODE_AVAILABLE and hasattr(self, 'listening_indicator'):
+            self.listening_indicator.setVisible(False)
+
+    def _play_entrance_sound(self):
+        """Play entrance sound effect when exam starts"""
+        if self.blind_mode:
+            self.blind_mode.play_entrance_beep()
 
 

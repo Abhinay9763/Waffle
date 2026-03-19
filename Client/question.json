@@ -1,301 +1,77 @@
 {
   "meta": {
-    "exam_name": "Data Structures (R25) - Mid Examination",
-    "start_time": "2026-02-25T20:17:27.521Z",
-    "end_time": "2026-02-26T00:17:27.521Z",
-    "total_marks": 50
+    "exam_id": 101,
+    "title": "Sample Entrance Exam",
+    "duration_minutes": 180,
+    "total_marks": 300
   },
   "sections": [
     {
       "section_id": 1,
-      "name": "Section A - Arrays, Stacks, Queues",
+      "name": "Mathematics",
       "questions": [
-        {"question_id": 1, "text": "dddddasd?", "options": ["O(1)", "O(n)", "O(log n)", "O(n^2)"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 2, "text": "Binary search requires the array to be?", "options": ["Sorted", "Unsorted", "Circular", "Dynamic"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 3, "text": "Worst case time complexity of linear search?", "options": ["O(1)", "O(n)", "O(log n)", "O(n log n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 4, "text": "Stack follows which principle?", "options": ["FIFO", "LIFO", "Priority", "Random"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 5, "text": "Queue follows which principle?", "options": ["FIFO", "LIFO", "DFS", "Recursion"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 6, "text": "Push operation inserts element at?", "options": ["Top", "Front", "Rear", "Middle"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 7, "text": "Pop operation removes element from?", "options": ["Top", "Rear", "Front", "Middle"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 8, "text": "Insertion at beginning of array costs?", "options": ["O(1)", "O(n)", "O(log n)", "O(n^2)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 9, "text": "Circular queue is used to avoid?", "options": ["Memory wastage", "Overflow", "Underflow", "Sorting"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 10, "text": "Stack overflow occurs when?", "options": ["Stack is full", "Stack is empty", "Stack is sorted", "Stack is reversed"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 11, "text": "Queue underflow occurs when?", "options": ["Queue is empty", "Queue is full", "Queue is circular", "Queue is sorted"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 12, "text": "Deque allows insertion at?", "options": ["Front only", "Rear only", "Both ends", "Middle only"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 13, "text": "Dynamic arrays grow using?", "options": ["Resizing", "Hashing", "Recursion", "Stacking"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 14, "text": "Expression evaluation commonly uses?", "options": ["Stack", "Queue", "Heap", "Tree only"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 15, "text": "Time complexity of enqueue?", "options": ["O(1)", "O(n)", "O(log n)", "O(n^2)"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 16, "text": "Time complexity of push in stack?", "options": ["O(1)", "O(n)", "O(log n)", "O(n log n)"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 17, "text": "Array index starts from?", "options": ["0", "1", "-1", "Depends"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 18, "text": "Which structure uses front and rear pointers?", "options": ["Stack", "Queue", "Tree", "Graph"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 19, "text": "Balanced parentheses checking uses?", "options": ["Queue", "Stack", "Heap", "Graph"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 20, "text": "Binary search time complexity?", "options": ["O(n)", "O(log n)", "O(1)", "O(n^2)"], "correct_option": 1, "marks": 1, "negative_marks": 0}
+        {
+          "question_id": 1,
+          "text": "What is the derivative of x squared?",
+          "image_url": null,
+          "options": [
+            { "id": 1, "text": "x" },
+            { "id": 2, "text": "2x" },
+            { "id": 3, "text": "x squared" },
+            { "id": 4, "text": "2" }
+          ],
+          "correct_option": 2,
+          "marks": 4,
+          "negative_marks": 1
+        },
+        {
+          "question_id": 2,
+          "text": "Evaluate the integral of 1/x dx.",
+          "image_url": null,
+          "options": [
+            { "id": 1, "text": "ln(x) + C" },
+            { "id": 2, "text": "1/x + C" },
+            { "id": 3, "text": "x + C" },
+            { "id": 4, "text": "e^x + C" }
+          ],
+          "correct_option": 1,
+          "marks": 4,
+          "negative_marks": 1
+        }
       ]
     },
     {
       "section_id": 2,
-      "name": "Section B - Linked Lists and Trees",
+      "name": "Physics",
       "questions": [
-        {"question_id": 21, "text": "Linked list elements are stored in?", "options": ["Contiguous memory", "Random memory locations", "Registers", "Cache only"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 22, "text": "Singly linked list node contains?", "options": ["Data + next", "Data + prev", "Two next pointers", "Only data"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 23, "text": "Doubly linked list has?", "options": ["One pointer", "Two pointers", "Three pointers", "No pointer"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 24, "text": "Insertion at head in linked list takes?", "options": ["O(1)", "O(n)", "O(log n)", "O(n^2)"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 25, "text": "Deletion in linked list requires?", "options": ["Pointer adjustment", "Sorting", "Hashing", "Index shift"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 26, "text": "Binary tree maximum children per node?", "options": ["1", "2", "3", "Unlimited"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 27, "text": "Inorder traversal order?", "options": ["Left-Root-Right", "Root-Left-Right", "Left-Right-Root", "Right-Root-Left"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 28, "text": "Preorder traversal order?", "options": ["Root-Left-Right", "Left-Root-Right", "Left-Right-Root", "Right-Left-Root"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 29, "text": "Postorder traversal order?", "options": ["Left-Right-Root", "Root-Left-Right", "Left-Root-Right", "Right-Root-Left"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 30, "text": "Height of balanced BST is?", "options": ["O(n)", "O(log n)", "O(1)", "O(n^2)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 31, "text": "Leaf node has?", "options": ["No children", "One child", "Two children", "Many children"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 32, "text": "Full binary tree means?", "options": ["Every node has 0 or 2 children", "All leaves same level", "Every node has 1 child", "Complete tree"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 33, "text": "Complete binary tree fills?", "options": ["Left to right", "Right to left", "Random", "Top only"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 34, "text": "Searching in BST average case?", "options": ["O(log n)", "O(n)", "O(1)", "O(n^2)"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 35, "text": "Worst case height of skewed BST?", "options": ["O(log n)", "O(n)", "O(1)", "O(n log n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 36, "text": "Level order traversal uses?", "options": ["Stack", "Queue", "Heap", "Array"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 37, "text": "Binary heap is a?", "options": ["Complete binary tree", "BST", "Graph", "Stack"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 38, "text": "Min-heap property?", "options": ["Parent <= children", "Parent >= children", "Sorted array", "Balanced tree"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 39, "text": "Max-heap root contains?", "options": ["Smallest element", "Largest element", "Median", "Random"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 40, "text": "Insertion in heap takes?", "options": ["O(log n)", "O(n)", "O(1)", "O(n^2)"], "correct_option": 0, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 3,
-      "name": "Section C - Graphs, Hashing, and Sorting",
-      "questions": [
-        {"question_id": 41, "text": "Which graph traversal uses a queue?", "options": ["BFS", "DFS", "Dijkstra", "None"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 42, "text": "Which graph traversal uses a stack?", "options": ["BFS", "DFS", "Prim's", "Kruskal's"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 43, "text": "An adjacency matrix for a graph with V nodes takes space?", "options": ["O(V)", "O(V^2)aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "O(E)", "O(V+E)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 44, "text": "What is the average time complexity of QuickSort?", "options": ["O(n^2)", "O(n log n)", "O(n)", "O(log n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 45, "text": "Which sort is considered stable and uses divide & conquer?", "options": ["Selection Sort", "Merge Sort", "Bubble Sort", "Quick Sort"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 46, "text": "A hash collaaaaaaaa aaaaaaaaaaaaaaaaaa aaaaaaaaaaa aaaaaaaaaaaaaa aaaaaaaaaaa aaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaision happens when?", "options": ["Two keys hash to same index", "Table is empty", "Table is full", "Search fails"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 47, "text": "In open addressing, what is linear probing?", "options": ["Searching linearly for next slot", "Using a second hash", "Using a linked list", "Growing the table"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 48, "text": "Worst case complexity of Bubble Sort?", "options": ["O(n log n)", "O(n)", "O(n^2)", "O(1)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 49, "text": "Which data structure is used to find Shortest Path in Dijkstra?", "options": ["Stack", "Priority Queue", "Circular Queue", "Tree"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 50, "text": "A graph with no cycles is called?", "options": ["Acyclic", "Cyclic", "Complete", "Bipartite"], "correct_option": 0, "marks": 1, "negative_marks": 0}
-      ]
-    },
-     {
-      "section_id": 4,
-      "name": "Advanced Trees and Balancing",
-      "questions": [
-        {"question_id": 51, "text": "What is the maximum balance factor allowed in an AVL tree?", "options": ["0", "1", "2", "Unlimited"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 52, "text": "Which rotation is required if a node is inserted into the right subtree of a right child?", "options": ["LL", "RR", "LR", "RL"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 53, "text": "In a B-Tree of order m, every node except the root has at least how many children?", "options": ["m", "m/2", "ceil(m/2)", "m-1"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 54, "text": "A Red-Black tree ensures that no path is more than how many times as long as any other path?", "options": ["2", "3", "1.5", "log n"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 55, "text": "Which tree is specifically designed for secondary storage/databases?", "options": ["AVL Tree", "Binary Search Tree", "B+ Tree", "Splay Tree"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 56, "text": "In a splay tree, which node is moved to the root after every access?", "options": ["Smallest node", "Largest node", "The accessed node", "The parent of accessed node"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 57, "text": "What is the complexity of searching in an AVL tree?", "options": ["O(n)", "O(log n)", "O(n log n)", "O(1)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 58, "text": "A node in a Red-Black tree with no children is colored?", "options": ["Red", "Black", "Double Red", "White"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 59, "text": "Threaded binary trees replace NULL pointers with pointers to?", "options": ["Root", "Ancestors", "Inorder Successor/Predecessor", "Leaf nodes"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 60, "text": "Height of a complete binary tree with n nodes is?", "options": ["n", "log n", "n/2", "n^2"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 5,
-      "name": "Advanced Hashing and String Algorithms",
-      "questions": [
-        {"question_id": 61, "text": "The load factor of a hash table is defined as?", "options": ["n/m", "m/n", "n*m", "n+m"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 62, "text": "Which collision resolution technique is known as 'Closed Hashing'?", "options": ["Chaining", "Open Addressing", "Hashing with Lists", "Re-hashing"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 63, "text": "Double hashing helps in reducing?", "options": ["Primary clustering", "Secondary clustering", "Search time only", "Both primary and secondary clustering"], "correct_option": 3, "marks": 1, "negative_marks": 0},
-        {"question_id": 64, "text": "Which hash function is commonly used for strings?", "options": ["Division method", "Mid-square method", "Polynomial rolling hash", "Folding method"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 65, "text": "Worst case search time in a hash table using chaining is?", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 66, "text": "A Trie is also known as a?", "options": ["Prefix Tree", "Suffix Tree", "Binary Tree", "Heap"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 67, "text": "The time complexity to search a word of length 'L' in a Trie is?", "options": ["O(n)", "O(log n)", "O(L)", "O(2^L)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 68, "text": "Which data structure is best for autocomplete features?", "options": ["Hash Table", "Trie", "BST", "Stack"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 69, "text": "Rehashing occurs when?", "options": ["Collision happens", "Load factor exceeds threshold", "An element is deleted", "Table is empty"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 70, "text": "Quadratic probing suffers from?", "options": ["Primary clustering", "Secondary clustering", "Underflow", "Recursive loops"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 6,
-      "name": "Graph Algorithms and Connectivity",
-      "questions": [
-        {"question_id": 71, "text": "Which algorithm is used to find the Shortest Path from a single source to all other nodes?", "options": ["Kruskal's", "Dijkstra's", "Prim's", "Floyd-Warshall"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 72, "text": "The Floyd-Warshall algorithm uses which approach?", "options": ["Greedy", "Dynamic Programming", "Backtracking", "Divide and Conquer"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 73, "text": "Which graph algorithm can handle negative edge weights (but not negative cycles)?", "options": ["Dijkstra", "Bellman-Ford", "Prim", "BFS"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 74, "text": "Topological sorting is applicable only to?", "options": ["Undirected Graphs", "Directed Acyclic Graphs (DAG)", "Complete Graphs", "Connected Graphs"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 75, "text": "Which algorithm is used to find the Minimum Spanning Tree by selecting the smallest edges first?", "options": ["Prim's", "Kruskal's", "Dijkstra", "Bellman-Ford"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 76, "text": "In Prim's algorithm, the MST is built by?", "options": ["Selecting edges with lowest weight", "Adding the nearest unvisited vertex", "Relaxing all edges V-1 times", "Using a stack"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 77, "text": "A graph is 'strongly connected' if?", "options": ["Every node is reachable from every other node", "It has no cycles", "It is a tree", "It has no negative edges"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 78, "text": "What is the time complexity of BFS using an adjacency list?", "options": ["O(V)", "O(E)", "O(V+E)", "O(V^2)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 79, "text": "Which data structure is essential for Kruskal's algorithm?", "options": ["Queue", "Stack", "Disjoint Set Union (DSU)", "B-Tree"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 80, "text": "In a graph, the number of edges incident to a vertex is its?", "options": ["Weight", "Degree", "Path", "Cycle"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 7,
-      "name": "Algorithm Analysis and Asymptotic Notation",
-      "questions": [
-        {"question_id": 81, "text": "Which notation provides an asymptotic upper bound?", "options": ["Omega (Ω)", "Theta (Θ)", "Big O (O)", "Little o (o)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 82, "text": "If f(n) = 3n^2 + 5n, what is its Big O complexity?", "options": ["O(n)", "O(n^2)", "O(n^3)", "O(log n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 83, "text": "Which complexity is higher?", "options": ["O(n log n)", "O(n^2)", "O(2^n)", "O(n!)"], "correct_option": 3, "marks": 1, "negative_marks": 0},
-        {"question_id": 84, "text": "Space complexity includes?", "options": ["Input space only", "Auxiliary space only", "Both input and auxiliary space", "Cache memory"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 85, "text": "The Master Theorem is used for solving?", "options": ["Sorting problems", "Recurrence relations", "Graph connectivity", "Hash collisions"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 86, "text": "Time complexity of binary search on a linked list is?", "options": ["O(log n)", "O(1)", "O(n)", "O(n log n)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 87, "text": "Amortized analysis is used when?", "options": ["Operations are always slow", "Occasional expensive operations occur in a sequence of cheap ones", "Memory is limited", "Using recursion"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 88, "text": "The growth rate of log(n!) is approximately?", "options": ["O(n)", "O(n log n)", "O(n^2)", "O(2^n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 89, "text": "Which notation provides an asymptotic tight bound?", "options": ["Big O", "Omega", "Theta", "Little omega"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 90, "text": "Complexity of nested loops where the inner loop runs i times?", "options": ["O(n)", "O(n log n)", "O(n^2)", "O(n!)"], "correct_option": 2, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 8,
-      "name": "Heaps and Priority Queues",
-      "questions": [
-        {"question_id": 91, "text": "In a Max-Heap, where is the second largest element located?", "options": ["Root", "Children of the root", "Any leaf node", "Last level"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 92, "text": "What is the complexity of building a heap from an array of size n?", "options": ["O(n log n)", "O(n)", "O(log n)", "O(n^2)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 93, "text": "A Priority Queue can be efficiently implemented using?", "options": ["Stack", "Simple Queue", "Heap", "Binary Search Tree"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 94, "text": "Which operation is used to maintain heap property after root deletion?", "options": ["Heapify", "Splay", "Rotate", "Recurse"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 95, "text": "Complexity of extracting the minimum from a Min-Heap?", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 96, "text": "A d-ary heap is a generalization of binary heap where each node has?", "options": ["d parents", "At most d children", "d^2 nodes", "d levels"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 97, "text": "Decreasing a key in a Min-Heap requires?", "options": ["Moving the node down", "Moving the node up (bubbling)", "Nothing", "Rebuilding the heap"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 98, "text": "Binary heaps are typically represented as?", "options": ["Linked Lists", "Arrays", "Graphs", "Hash Tables"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 99, "text": "Internal nodes in a heap of n elements are approximately?", "options": ["n", "n/2", "log n", "sqrt(n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 100, "text": "Heap sort is which type of algorithm?", "options": ["Stable", "In-place", "Divide and conquer", "External"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 9,
-      "name": "Divide and Conquer & Recursive Strategies",
-      "questions": [
-        {"question_id": 101, "text": "Which part of QuickSort is responsible for the 'Divide' step?", "options": ["Merge", "Partition", "Heapify", "Pivot Selection"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 102, "text": "What is the worst-case time complexity of Merge Sort?", "options": ["O(n)", "O(n log n)", "O(n^2)", "O(log n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 103, "text": "Binary search is an example of which paradigm?", "options": ["Greedy", "Dynamic Programming", "Divide and Conquer", "Backtracking"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 104, "text": "Strassen’s algorithm is used for efficient?", "options": ["Sorting", "Matrix Multiplication", "Graph Traversal", "Tree Balancing"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 105, "text": "The recurrence relation T(n) = 2T(n/2) + n describes which sort?", "options": ["Bubble Sort", "Quick Sort", "Merge Sort", "Insertion Sort"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 106, "text": "In QuickSort, choosing the median as the pivot results in?", "options": ["Worst case", "Best case", "Average case only", "Stack overflow"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 107, "text": "Tail recursion is efficient because?", "options": ["It uses more memory", "It can be optimized to avoid new stack frames", "It is always faster to write", "It avoids base cases"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 108, "text": "Which of the following is NOT a Divide and Conquer algorithm?", "options": ["QuickSort", "Merge Sort", "Binary Search", "Dijkstra's Algorithm"], "correct_option": 3, "marks": 1, "negative_marks": 0},
-        {"question_id": 109, "text": "What is the complexity of finding the maximum and minimum in an array using Divide and Conquer?", "options": ["O(n^2)", "O(n log n)", "O(n)", "O(log n)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 110, "text": "Karatsuba algorithm is used for fast?", "options": ["String matching", "Integer multiplication", "Sorting", "Shortest path"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 10,
-      "name": "Greedy Algorithms and Optimization",
-      "questions": [
-        {"question_id": 111, "text": "The Fractional Knapsack problem is solved using which approach?", "options": ["Dynamic Programming", "Greedy", "Backtracking", "Brute Force"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 112, "text": "Huffman coding is used for?", "options": ["Encryption", "Data Compression", "Sorting", "Hashing"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 113, "text": "In Huffman coding, more frequent characters have?", "options": ["Longer codes", "Shorter codes", "Fixed length codes", "No codes"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 114, "text": "The 0/1 Knapsack problem CANNOT be solved optimally by?", "options": ["Dynamic Programming", "Greedy method", "Branch and Bound", "Backtracking"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 115, "text": "Job Sequencing with Deadlines aims to maximize?", "options": ["Time", "Number of jobs", "Profit", "Deadlines"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 116, "text": "Which of these is a greedy algorithm?", "options": ["Floyd-Warshall", "Kruskal's", "Matrix Chain Multiplication", "Bellman-Ford"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 117, "text": "A greedy algorithm always makes a choice that looks best at?", "options": ["The end", "The beginning", "The current moment", "The global level"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 118, "text": "What is the time complexity of building a Huffman Tree?", "options": ["O(n log n)", "O(n^2)", "O(n)", "O(log n)"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 119, "text": "The Activity Selection problem requires sorting activities by?", "options": ["Start time", "Finish time", "Duration", "Profit"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 120, "text": "Optimal Merge Pattern uses which data structure?", "options": ["Min-Heap", "Stack", "Queue", "Hash Table"], "correct_option": 0, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 11,
-      "name": "Backtracking and State-Space Search",
-      "questions": [
-        {"question_id": 121, "text": "Which data structure is typically used to implement backtracking?", "options": ["Queue", "Stack/Recursion", "Heap", "Linked List"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 122, "text": "The N-Queens problem is a classic example of?", "options": ["Greedy", "Backtracking", "Dynamic Programming", "Divide and Conquer"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 123, "text": "In the Hamiltonian Circuit problem, we search for a path that visits?", "options": ["Every edge once", "Every vertex once", "Every cycle", "The root node"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 124, "text": "What is the time complexity of the N-Queens problem?", "options": ["O(n^2)", "O(2^n)", "O(n!)", "O(n log n)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 125, "text": "Pruning in backtracking is used to?", "options": ["Increase memory", "Cut off branches that don't lead to a solution", "Sort the input", "Find the shortest path"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 126, "text": "Which of these is a backtracking problem?", "options": ["Binary Search", "Subset Sum", "Merge Sort", "Dijkstra"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 127, "text": "A state-space tree represents?", "options": ["The input array", "All possible configurations of a problem", "The memory stack", "The balanced tree"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 128, "text": "In a Graph Coloring problem, 'm' represents?", "options": ["Edges", "Vertices", "Maximum colors allowed", "Minimum weight"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 129, "text": "Backtracking is basically an improved version of?", "options": ["Brute Force Search", "Greedy Search", "Binary Search", "Linear Search"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 130, "text": "Which traversal is similar to the way backtracking explores a tree?", "options": ["BFS", "DFS", "Level Order", "Inorder"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 12,
-      "name": "Dynamic Programming (DP)",
-      "questions": [
-        {"question_id": 171, "text": "Dynamic Programming is based on which property?", "options": ["Greedy choice", "Optimal Substructure", "Randomization", "LIFO"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 172, "text": "The technique of storing results of expensive function calls is called?", "options": ["Hashing", "Memoization", "Splaying", "Rehashing"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 173, "text": "Which approach does 'Bottom-up' DP follow?", "options": ["Recursive", "Iterative (Tabulation)", "Backtracking", "Divide and Conquer"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 174, "text": "What is the time complexity of the Longest Common Subsequence (LCS) for two strings of length n and m?", "options": ["O(n+m)", "O(n*m)", "O(2^n)", "O(log n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 175, "text": "Which problem is solved using the Floyd-Warshall algorithm?", "options": ["Single-source shortest path", "All-pairs shortest path", "Minimum spanning tree", "Topological sort"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 176, "text": "In 0/1 Knapsack using DP, what does the '0/1' signify?", "options": ["Binary weights", "Items cannot be divided", "Profit is either 0 or 1", "Only two items allowed"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 177, "text": "Matrix Chain Multiplication is used to find?", "options": ["The result of multiplication", "The optimal way to parenthesize matrices", "The inverse of a matrix", "The determinant"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 178, "text": "Bellman-Ford algorithm complexity is?", "options": ["O(V+E)", "O(VE)", "O(V^3)", "O(E log V)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 179, "text": "The Bellman-Ford algorithm can detect?", "options": ["Positive cycles", "Negative cycles", "Cycles of length 3", "Self-loops only"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 180, "text": "Which of these is NOT a DP problem?", "options": ["Edit Distance", "Coin Change", "Fractional Knapsack", "Traveling Salesman Problem"], "correct_option": 2, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 13,
-      "name": "String Matching and Pattern Searching",
-      "questions": [
-        {"question_id": 181, "text": "Which string matching algorithm uses a 'Prefix Function' or 'pi table'?", "options": ["Naive", "Rabin-Karp", "Knuth-Morris-Pratt (KMP)", "Boyer-Moore"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 182, "text": "Rabin-Karp algorithm uses which technique to find matches?", "options": ["Recursion", "Hashing", "Sorting", "Stacking"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 183, "text": "What is the worst-case complexity of the Naive string matching algorithm?", "options": ["O(n)", "O(m)", "O(n*m)", "O(n+m)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 184, "text": "The KMP algorithm improves matching by avoiding?", "options": ["Hash collisions", "Backtracking over already matched characters", "Memory allocation", "Recursive calls"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 185, "text": "What is the time complexity of the KMP algorithm?", "options": ["O(n*m)", "O(n+m)", "O(n log m)", "O(2^n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 186, "text": "Rabin-Karp 'Spurious Hit' occurs when?", "options": ["Hash values match but strings do not", "Strings match but hash values do not", "Pattern is longer than text", "Table is empty"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 187, "text": "Which algorithm is most efficient for searching multiple patterns simultaneously?", "options": ["KMP", "Aho-Corasick", "Boyer-Moore", "Naive"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 188, "text": "Boyer-Moore algorithm starts matching from?", "options": ["Left to Right", "Right to Left", "Middle", "Randomly"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 189, "text": "A suffix tree can be built in what time complexity for a string of length n?", "options": ["O(n^2)", "O(n)", "O(log n)", "O(n!)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 190, "text": "Which data structure is the basis of a Suffix Tree?", "options": ["Heap", "Trie", "Hash Table", "Stack"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 14,
-      "name": "Complexity Theory (P, NP, NP-Hard)",
-      "questions": [
-        {"question_id": 191, "text": "The class 'P' contains problems that can be solved in?", "options": ["Polynomial time", "Exponential time", "Logarithmic time", "Constant time"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 192, "text": "The class 'NP' stands for?", "options": ["Non-Polynomial", "Non-deterministic Polynomial", "Node-Parallel", "Number-Prime"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 193, "text": "A problem is 'NP-Complete' if?", "options": ["It is in P", "It is in NP and every problem in NP can be reduced to it", "It cannot be solved", "It is only solved by Greedy"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 194, "text": "Which of these is a famous NP-Complete problem?", "options": ["Binary Search", "Merge Sort", "3-SAT", "Shortest Path in DAG"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 195, "text": "NP-Hard problems are?", "options": ["Always in NP", "At least as hard as the hardest problems in NP", "Solved in O(1)", "Only related to sorting"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 196, "text": "If P = NP, it would mean?", "options": ["Verification is easier than solution", "Every problem that can be verified quickly can also be solved quickly", "Computers can never solve NP problems", "All problems are O(1)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 197, "text": "The Traveling Salesman Problem (Decision version) is?", "options": ["P", "NP-Complete", "Linear", "Logarithmic"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 198, "text": "Reduction is a technique used to?", "options": ["Compress data", "Transform one problem into another", "Sort arrays", "Balance trees"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 199, "text": "Cook’s Theorem proves that which problem is NP-Complete?", "options": ["Sorting", "Boolean Satisfiability (SAT)", "LCS", "MST"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 200, "text": "A deterministic Turing machine is used to define which class?", "options": ["NP", "P", "NP-Hard", "Recursive"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 15,
-      "name": "Advanced Data Structures & Range Queries",
-      "questions": [
-        {"question_id": 201, "text": "Which data structure is best for finding the sum of elements in a range [i, j] with updates?", "options": ["Stack", "Segment Tree", "Queue", "Hash Table"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 202, "text": "A Fenwick Tree is also known as a?", "options": ["Binary Indexed Tree", "Red-Black Tree", "Splay Tree", "B+ Tree"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 203, "text": "What is the time complexity of a range sum query in a Segment Tree?", "options": ["O(1)", "O(n)", "O(log n)", "O(n log n)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 204, "text": "Which technique is used to update a range of values in a Segment Tree efficiently?", "options": ["Lazy Propagation", "Quick Update", "Rehashing", "Rotation"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 205, "text": "A Disjoint Set Union (DSU) uses which two optimizations?", "options": ["Push and Pop", "Path Compression and Union by Rank", "Rotation and Splaying", "Hashing and Linear Probing"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 206, "text": "What is the nearly constant time complexity of DSU operations after optimizations?", "options": ["O(1)", "O(log n)", "O(alpha(n)) - Inverse Ackermann", "O(n)"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 207, "text": "In a Trie, each node typically contains?", "options": ["An array of pointers", "A single data value", "A stack", "A priority queue"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 208, "text": "Which data structure is used to solve the 'Lowest Common Ancestor' (LCA) problem efficiently?", "options": ["Hash Map", "Binary Lifting / Sparse Table", "Linked List", "Deque"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 209, "text": "A Sparse Table is best suited for which type of range queries?", "options": ["Range Sum with Updates", "Range Minimum Query (Static)", "Range Average", "Range Sorting"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 210, "text": "A Bloom Filter is used to check?", "options": ["The value of an element", "Set membership (probabilistic)", "The frequency of elements", "Shortest path"], "correct_option": 1, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 16,
-      "name": "Randomized and Miscellaneous Algorithms",
-      "questions": [
-        {"question_id": 211, "text": "Randomized QuickSort avoids which worst-case scenario?", "options": ["Memory overflow", "Already sorted input", "Small arrays", "Negative numbers"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 212, "text": "Which algorithm is used to find the Kth smallest element in O(n) average time?", "options": ["QuickSelect", "MergeSort", "HeapSort", "Binary Search"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 213, "text": "A skip list is a probabilistic alternative to?", "options": ["Hash Tables", "Balanced BSTs", "Stacks", "Queues"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 214, "text": "What is the expected search time in a Skip List?", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 215, "text": "In bit manipulation, the expression (x & (x-1)) == 0 checks if x is?", "options": ["Even", "Odd", "A power of 2", "A prime number"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 216, "text": "External sorting is used when?", "options": ["Data fits in RAM", "Data is too large for RAM", "Data is sorted", "Using recursion"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 217, "text": "Which algorithm is used for External Sorting?", "options": ["QuickSort", "Multi-way Merge Sort", "Bubble Sort", "Insertion Sort"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 218, "text": "The 'Birthday Paradox' is relevant in the study of?", "options": ["Graph theory", "Hash collisions", "Sorting", "Stack overflow"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 219, "text": "Fisher-Yates algorithm is used for?", "options": ["Sorting", "Randomly shuffling an array", "Finding primes", "Matrix inversion"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 220, "text": "Monte Carlo algorithms are characterized by?", "options": ["Always correct result", "Deterministic behavior", "Fixed running time but probabilistic correctness", "Infinite loops"], "correct_option": 2, "marks": 1, "negative_marks": 0}
-      ]
-    },
-    {
-      "section_id": 17,
-      "name": "Comprehensive Final Review",
-      "questions": [
-        {"question_id": 221, "text": "Which data structure is used in a Compiler for variable scope management?", "options": ["Queue", "Symbol Table (Hash Table/BST)", "Heap", "Linked List"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 222, "text": "The 'In-order' successor of a node in a BST is?", "options": ["Leftmost node in right subtree", "Rightmost node in left subtree", "The parent", "The root"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 223, "text": "Which sort is used by the Python 'sort()' function (Timsort)?", "options": ["Quick + Heap", "Merge + Insertion", "Bubble + Selection", "Radix"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 224, "text": "A graph with V vertices and V-1 edges that is connected is a?", "options": ["Complete Graph", "Tree", "Cycle", "Bipartite Graph"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 225, "text": "Space complexity of an adjacency list for a graph G(V, E)?", "options": ["O(V^2)", "O(V+E)", "O(E^2)", "O(log V)"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 226, "text": "Which problem cannot be solved using a Greedy approach?", "options": ["Huffman Coding", "Minimum Spanning Tree", "0/1 Knapsack", "Fractional Knapsack"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 227, "text": "Recursion depth can lead to which error?", "options": ["Segmentation fault", "Stack Overflow", "Out of Memory", "Syntax Error"], "correct_option": 1, "marks": 1, "negative_marks": 0},
-        {"question_id": 228, "text": "Finding the diameter of a tree takes?", "options": ["O(V)", "O(V^2)", "O(log V)", "O(V*E)"], "correct_option": 0, "marks": 1, "negative_marks": 0},
-        {"question_id": 229, "text": "Which traversal of a BST yields elements in sorted order?", "options": ["Pre-order", "Post-order", "In-order", "Level-order"], "correct_option": 2, "marks": 1, "negative_marks": 0},
-        {"question_id": 230, "text": "In a Max-Heap, the root is always the?", "options": ["Minimum", "Maximum", "Median", "Average"], "correct_option": 1, "marks": 1, "negative_marks": 0}
+        {
+          "question_id": 3,
+          "text": "What is the SI unit of force?",
+          "image_url": null,
+          "options": [
+            { "id": 1, "text": "Joule" },
+            { "id": 2, "text": "Newton" },
+            { "id": 3, "text": "Pascal" },
+            { "id": 4, "text": "Watt" }
+          ],
+          "correct_option": 2,
+          "marks": 4,
+          "negative_marks": 1
+        },
+        {
+          "question_id": 4,
+          "text": "Identify the graph shown.",
+          "image_url": "https://example.com/images/graph_q4.png",
+          "options": [
+            { "id": 1, "text": "Linear motion" },
+            { "id": 2, "text": "Uniform acceleration" },
+            { "id": 3, "text": "Simple harmonic motion" },
+            { "id": 4, "text": "Exponential decay" }
+          ],
+          "correct_option": 3,
+          "marks": 4,
+          "negative_marks": 1
+        }
       ]
     }
   ]

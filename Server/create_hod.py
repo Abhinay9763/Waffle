@@ -11,8 +11,8 @@ from supa import db
 async def create_hod():
     # HOD account details
     hod_data = {
-        "name": "Department Head",      # Change this
-        "email": "hod@smec.ac.in",     # Change this
+        "name": "Head",      # Change this
+        "email": "psrekha1976@gmail.com",     # Change this
         "password": hashPassword("hod123"),  # Change this password
         "roll": "HOD001",              # Change this
         "role": "HOD",

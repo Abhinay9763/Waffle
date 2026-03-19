@@ -171,14 +171,32 @@ function reducer(state: BuilderState, action: Action): BuilderState {
     case "REMOVE_QUESTION": {
       if (!state.activeId || flat.length <= 1) return state;
       const idx = flat.findIndex(q => q.question_id === state.activeId);
-      const newFlat = flat.filter(q => q.question_id !== state.activeId);
-      const newActive = newFlat[Math.min(idx, newFlat.length - 1)].question_id;
+
+      // Remove the question first
+      const sectionsWithQuestionRemoved = state.sections
+        .map(s => ({ ...s, questions: s.questions.filter(q => q.question_id !== state.activeId) }))
+        .filter(s => s.questions.length > 0);
+
+      // Renumber all remaining questions sequentially starting from 1
+      let newQuestionId = 1;
+      const renumberedSections = sectionsWithQuestionRemoved.map(section => ({
+        ...section,
+        questions: section.questions.map(question => ({
+          ...question,
+          question_id: newQuestionId++
+        }))
+      }));
+
+      // Calculate new active ID (same relative position, but with new numbering)
+      const newFlat = flatQuestions(renumberedSections);
+      const newActiveIndex = Math.min(idx, newFlat.length - 1);
+      const newActive = newFlat[newActiveIndex]?.question_id || null;
+
       return {
         ...state,
-        sections: state.sections
-          .map(s => ({ ...s, questions: s.questions.filter(q => q.question_id !== state.activeId) }))
-          .filter(s => s.questions.length > 0),
+        sections: renumberedSections,
         activeId: newActive,
+        _nextQId: newQuestionId, // Set to next available ID after renumbering
       };
     }
 
