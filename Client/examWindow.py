@@ -128,6 +128,7 @@ class MainWindow(QMainWindow):
         self.blind_mode_enabled = False
         self.blind_mode = None
         self.should_auto_speak_question = False  # Flag to control when to auto-speak questions
+        self.suppress_auto_speak = False  # Flag to temporarily suppress auto-speak during UI updates
         if BLIND_MODE_AVAILABLE:
             self.blind_mode = BlindModeManager(parent=self)
             self.blind_mode.command_recognized.connect(self._handle_blind_command)
@@ -585,7 +586,7 @@ class MainWindow(QMainWindow):
             letter = option_labels[i] if i < len(option_labels) else str(i + 1)
 
             frame = ClickableOption(
-                callback=lambda _, idx=i, q=self.current_question: self.answerQuestion(q, idx)
+                callback=lambda idx=i, q=self.current_question: self.answerQuestion(q, idx)
             )
             if response and i == response.option:
                 frame.setStyleSheet(
@@ -620,8 +621,8 @@ class MainWindow(QMainWindow):
 
             self.question_layout.addWidget(frame)
 
-        # Auto-speak question in blind mode
-        if self.blind_mode_enabled and self.blind_mode:
+        # Auto-speak question in blind mode (only if not suppressed)
+        if self.blind_mode_enabled and self.blind_mode and not self.suppress_auto_speak:
             self.blind_mode.speak_question(question, question_id + 1)
 
     def closeEvent(self, a0):
@@ -831,10 +832,7 @@ class MainWindow(QMainWindow):
 
     def _handle_blind_command(self, command: str):
         """Handle voice commands in blind mode"""
-        print(f"🎮 Received blind command: {command}")  # Debug
-
         if not self.blind_mode_enabled or not self.blind_mode:
-            print(f"🎮 Ignoring command - blind mode disabled")  # Debug
             return
 
         # Option selection
@@ -847,26 +845,39 @@ class MainWindow(QMainWindow):
                 # Check if this is the same option already selected
                 current_response = self.responses.get(self.current_question)
                 if current_response and current_response.option == option_idx:
+                    # Temporarily disable auto-speak during confirmation
+                    old_auto_speak = self.should_auto_speak_question
+                    self.should_auto_speak_question = False
+                    self.suppress_auto_speak = True  # Suppress auto-speak during confirmation
+
                     self.blind_mode.speak(f"Option {option_letter} already selected")
+
+                    # Restore auto-speak setting and clear suppress flag
+                    self.should_auto_speak_question = old_auto_speak
+                    self.suppress_auto_speak = False
                 else:
+                    # Temporarily disable auto-speak to prevent question re-reading
+                    old_auto_speak = self.should_auto_speak_question
+                    self.should_auto_speak_question = False
+                    self.suppress_auto_speak = True  # Suppress auto-speak during UI refresh
+
                     self.answerQuestion(self.current_question, option_idx)
-                    # Give confirmation with movement announcement
-                    if self.current_question < len(self.questions) - 1:
-                        self.blind_mode.speak(f"Selected Option {option_letter}. Moving to next question.")
-                        # Auto-advance after confirmation
-                        QTimer.singleShot(2000, lambda: self._delayed_next_question())
-                    else:
-                        self.blind_mode.speak(f"Selected Option {option_letter}. This is the last question.")
-                        QTimer.singleShot(1500, lambda: self._blind_mode_last_question_prompt())
+
+                    # Restore auto-speak setting and clear suppress flag
+                    self.should_auto_speak_question = old_auto_speak
+                    self.suppress_auto_speak = False
+
+                    # Give immediate clean confirmation
+                    self.blind_mode.speak(f"Selected Option {option_letter}")
             else:
                 self.blind_mode.speak("Invalid option for this question.")
 
         # Navigation
         elif command == 'NEXT':
             if self.current_question < len(self.questions) - 1:
-                self.switchQuestion(self.current_question + 1)
-                self.should_auto_speak_question = True  # Auto-speak after navigation
-                self.blind_mode.speak(f"Moved to question {self.current_question + 1}")
+                self.blind_mode.speak("Next Question")
+                # Brief pause then navigate
+                QTimer.singleShot(800, lambda: self._navigate_to_next())
             else:
                 # Last question - ask if they want to submit or go to unanswered
                 self.blind_mode.speak("Already at last question.")
@@ -874,9 +885,9 @@ class MainWindow(QMainWindow):
 
         elif command == 'PREV':
             if self.current_question > 0:
-                self.switchQuestion(self.current_question - 1)
-                self.should_auto_speak_question = True  # Auto-speak after navigation
-                self.blind_mode.speak(f"Moved to question {self.current_question + 1}")
+                self.blind_mode.speak("Going Back")
+                # Brief pause then navigate
+                QTimer.singleShot(800, lambda: self._navigate_to_previous())
             else:
                 self.blind_mode.speak("Already at first question.")
 
@@ -886,20 +897,24 @@ class MainWindow(QMainWindow):
             current_response = self.responses.get(self.current_question)
             was_marked = current_response and current_response.marked if current_response else False
 
+            # Temporarily disable auto-speak during marking
+            old_auto_speak = self.should_auto_speak_question
+            self.should_auto_speak_question = False
+            self.suppress_auto_speak = True
+
             self.markQuestion(self.current_question)
 
-            # Check new status after marking
+            # Restore auto-speak setting and clear suppress flag
+            self.should_auto_speak_question = old_auto_speak
+            self.suppress_auto_speak = False
+
+            # Check new status after marking and give confirmation
             updated_response = self.responses.get(self.current_question)
             is_now_marked = updated_response and updated_response.marked if updated_response else False
 
             if is_now_marked and not was_marked:
-                # Newly marked - give confirmation with movement
-                if self.current_question < len(self.questions) - 1:
-                    self.blind_mode.speak("Marked for review. Moving to next question.")
-                    QTimer.singleShot(2000, lambda: self._delayed_next_question())
-                else:
-                    self.blind_mode.speak("Marked for review. This is the last question.")
-                    QTimer.singleShot(1500, lambda: self._blind_mode_last_question_prompt())
+                # Clean confirmation
+                self.blind_mode.speak("Marked Question")
             elif not is_now_marked and was_marked:
                 self.blind_mode.speak("Review mark removed")
             elif is_now_marked:
@@ -916,9 +931,18 @@ class MainWindow(QMainWindow):
             # Check if there was an answer to clear
             current_response = self.responses.get(self.current_question)
             if current_response and current_response.option is not None:
-                option_letter = ['A', 'B', 'C', 'D', 'E', 'F'][current_response.option]
+                # Temporarily disable auto-speak during clearing
+                old_auto_speak = self.should_auto_speak_question
+                self.should_auto_speak_question = False
+                self.suppress_auto_speak = True
+
                 self.clearQuestion(self.current_question)
-                self.blind_mode.speak(f"Option {option_letter} cleared")
+
+                # Restore auto-speak setting and clear suppress flag
+                self.should_auto_speak_question = old_auto_speak
+                self.suppress_auto_speak = False
+
+                self.blind_mode.speak("Answer Cleared")
             else:
                 self.blind_mode.speak("No answer to clear for this question")
 
@@ -982,6 +1006,10 @@ class MainWindow(QMainWindow):
         if not self.blind_mode or not self.blind_mode_enabled:
             return
 
+        # Skip auto-speak if suppressed (during UI updates from blind mode)
+        if self.suppress_auto_speak:
+            return
+
         # Only auto-speak question if the flag is set (after navigation commands)
         if self.should_auto_speak_question and not self.blind_mode.is_speaking:
             self.should_auto_speak_question = False  # Reset flag
@@ -996,6 +1024,18 @@ class MainWindow(QMainWindow):
             return
         current_q = self.questions[self.current_question]
         self.blind_mode.speak_question(current_q, self.current_question + 1)
+
+    def _navigate_to_next(self):
+        """Navigate to next question after confirmation"""
+        if self.current_question < len(self.questions) - 1:
+            self.switchQuestion(self.current_question + 1)
+            self.should_auto_speak_question = True  # Auto-speak after navigation
+
+    def _navigate_to_previous(self):
+        """Navigate to previous question after confirmation"""
+        if self.current_question > 0:
+            self.switchQuestion(self.current_question - 1)
+            self.should_auto_speak_question = True  # Auto-speak after navigation
 
     def _show_listening_indicator(self):
         """Show the listening indicator"""

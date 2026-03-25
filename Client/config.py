@@ -1,4 +1,4 @@
-APP_NAME = "Waffle"
+APP_NAME = "QuizForge"
 
 API = "http://localhost:8000"
 WEB_URL = "http://localhost:3000"

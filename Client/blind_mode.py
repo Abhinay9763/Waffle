@@ -369,14 +369,9 @@ class BlindModeManager(QObject):
 
     def speak(self, text: str):
         """Convert text to speech and play it"""
-        print(f"🔊 Speak called: '{text[:50]}...' (state: {self._state.value})")  # Debug
-
         # State machine: only speak if IDLE
         if not self._can_speak():
-            print(f"❌ Cannot speak in state {self._state.value}, ignoring: {text[:50]}...")
             return
-
-        print(f"✅ Speaking allowed in state {self._state.value}")  # Debug
 
         # Stop any existing speech first
         if self._state == BlindModeState.SPEAKING:
@@ -673,20 +668,17 @@ class BlindModeManager(QObject):
 
         # Process the command
         command = self.parse_command(text)
-        print(f"📢 Parsed command: {command}")  # Debug
 
         if command:
-            print(f"📢 Emitting command: {command}")  # Debug
-
             # For commands that immediately trigger speech, transition to IDLE first
             # so the speak() function can work properly
-            if command in ['REPEAT', 'CLEAR', 'SUBMIT', 'UNANSWERED']:
+            if command in ['REPEAT', 'CLEAR', 'SUBMIT', 'UNANSWERED', 'NEXT', 'PREV', 'MARK'] or command.startswith('OPTION_'):
                 self._set_state(BlindModeState.IDLE, f"Command {command} - preparing for speech")
 
             self.command_recognized.emit(command)
 
             # For other commands, transition to IDLE after emission
-            if command not in ['REPEAT', 'CLEAR', 'SUBMIT', 'UNANSWERED']:
+            if command not in ['REPEAT', 'CLEAR', 'SUBMIT', 'UNANSWERED', 'NEXT', 'PREV', 'MARK'] and not command.startswith('OPTION_'):
                 self._set_state(BlindModeState.IDLE, f"Command {command} processed")
         else:
             # Unrecognized command - provide more helpful guidance

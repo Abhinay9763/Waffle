@@ -16,6 +16,7 @@ from routes.exam import router as examRouter
 from routes.auth import router as authRouter
 from routes.paper import router as paperRouter
 from routes.response import router as responseRouter
+from routes.client import router as clientRouter
 
 @contextlib.asynccontextmanager
 async def apiStart(a : FastAPI):
@@ -40,6 +41,7 @@ app.include_router(examRouter)
 app.include_router(authRouter)
 app.include_router(paperRouter)
 app.include_router(responseRouter)
+app.include_router(clientRouter)
 
 @app.get("/health-check")
 async def home():

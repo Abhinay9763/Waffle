@@ -68,3 +68,16 @@ class Session(BaseModel):
     user_id : int
     expiry : datetime
     token : str
+
+#REDUNDANT
+# class ClientVersion(BaseModel):
+#     id: Optional[int] = None
+#     version: str  # e.g., "1.0.1"
+#     required: bool = True  # If true, clients must update
+#     installer_url: str  # GitHub release URL to download client installer
+#     app_url: str  # GitHub release URL to app files (ZIP)
+#     release_notes: Optional[str] = None
+#     created_at: Optional[datetime] = None
+#     is_active: bool = True  # Current active version
+# past system used supabase cus i didnt know about github releases
+# current system implements github releases

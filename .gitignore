@@ -36,3 +36,10 @@ web/out/
 # ── Logs ─────────────────────────────────────────────────
 *.log
 crash.log
+
+#---other shit
+*.md
+*.iss
+*.bat
+builds/
+

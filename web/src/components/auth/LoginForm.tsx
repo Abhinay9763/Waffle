@@ -8,7 +8,7 @@ import { z } from "zod";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { setCookie } from "cookies-next";
-import { API, LOGO } from "@/lib/config";
+import { API, APP_NAME, LOGO } from "@/lib/config";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -116,9 +116,11 @@ export default function LoginForm() {
         {/* Logo */}
         <div className="flex items-center gap-3 text-yellow-400">
           <WaffleLogo />
-          <span className="translate-y-2 text-3xl font-semibold tracking-tight text-zinc-100">
-            Waffle
+          <strong>
+            <span className="translate-y-2 text-5xl font-sans tracking-tight text-yellow-400">
+            {APP_NAME}
           </span>
+          </strong>
         </div>
 
         {/* Tagline */}
@@ -129,7 +131,7 @@ export default function LoginForm() {
               <br />
               platform built for
               <br />
-              <span className="text-yellow-400">SMEC students.</span>
+              <span className="text-yellow-400">SMEC</span>
             </h2>
             <p className="text-zinc-400 text-sm leading-relaxed max-w-xs">
               Attend exams, track your progress, and get detailed
@@ -281,6 +283,13 @@ export default function LoginForm() {
               className="text-sky-400 hover:text-sky-300 font-medium transition-colors"
             >
               Create one
+            </Link>
+            {" "}or{" "}
+            <Link
+              href="/download"
+              className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+            >
+              Download Client
             </Link>
           </p>
 
