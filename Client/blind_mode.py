@@ -180,12 +180,11 @@ class SpeechRecognitionWorker(QThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.recognizer = sr.Recognizer()
-        # Conservative recognition settings for better accuracy
-        self.recognizer.energy_threshold = 300  # Back to more conservative threshold
+        # Optimized settings for command recognition
         self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold = 0.6  # Faster response
-        self.recognizer.phrase_threshold = 0.3  # Min audio length to consider as speech
-        self.recognizer.non_speaking_duration = 0.5  # How much silence before stopping
+        self.recognizer.pause_threshold = 0.4  # Faster response for short commands
+        self.recognizer.phrase_threshold = 0.2  # Lower threshold for short words
+        self.recognizer.non_speaking_duration = 0.4  # Quicker silence detection
         self._should_stop = False  # Flag to stop listening
         self.attempt_count = 0  # Track recognition attempts
 
@@ -198,65 +197,76 @@ class SpeechRecognitionWorker(QThread):
         self.attempt_count = 0
 
         try:
-            with sr.Microphone() as source:
+            # Try to use the default microphone with better configuration
+            with sr.Microphone(sample_rate=16000, chunk_size=1024) as source:
                 self.listening.emit()
-                print("🎤 Starting precise voice recognition...")  # Debug
+                print("🎤 Starting enhanced voice recognition...")
 
-                # Standard ambient noise adjustment
-                print("🎤 Calibrating microphone...")
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                print(f"🎤 Energy threshold: {self.recognizer.energy_threshold}")  # Debug
+                # Enhanced ambient noise calibration
+                self.recognizer.adjust_for_ambient_noise(source, duration=1.0)
+                initial_threshold = self.recognizer.energy_threshold
 
-                # Simplified 2-attempt approach for better accuracy
-                for main_attempt in range(2):  # Only 2 attempts to avoid accepting poor matches
+                # Multi-attempt strategy with progressive sensitivity
+                attempts_config = [
+                    # Attempt 1: More sensitive from the start
+                    {"threshold": max(80, initial_threshold * 0.6), "timeout": 4, "phrase_limit": 3, "name": "Sensitive"},
+                    # Attempt 2: High sensitivity
+                    {"threshold": max(60, initial_threshold * 0.4), "timeout": 5, "phrase_limit": 4, "name": "High Sensitivity"},
+                    # Attempt 3: Very high sensitivity
+                    {"threshold": max(40, initial_threshold * 0.3), "timeout": 6, "phrase_limit": 5, "name": "Very High"},
+                    # Attempt 4: Maximum sensitivity
+                    {"threshold": 30, "timeout": 7, "phrase_limit": 6, "name": "Maximum Sensitivity"},
+                ]
+
+                for attempt_idx, config in enumerate(attempts_config):
                     if self._should_stop:
-                        print("🎤 Listening stopped by user")  # Debug
                         return
 
-                    self.attempt_count = main_attempt + 1
-                    print(f"🎤 Recognition attempt {self.attempt_count}/2...")
+                    self.attempt_count = attempt_idx + 1
 
-                    # Conservative settings - prioritize accuracy over sensitivity
-                    if main_attempt == 0:
-                        # First attempt: Standard settings for best accuracy
-                        timeout = 3
-                        phrase_limit = 2
-                    else:
-                        # Second attempt: Slightly more time but same sensitivity
-                        timeout = 4
-                        phrase_limit = 3
-                        # Don't change energy threshold - keep it conservative
+                    # Apply attempt-specific settings
+                    self.recognizer.energy_threshold = config["threshold"]
 
                     try:
-                        print(f"🎤 Listening (timeout: {timeout}s)...")
-                        audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_limit)
-                        print("🎤 Audio captured, processing...")
+                        audio = self.recognizer.listen(
+                            source,
+                            timeout=config["timeout"],
+                            phrase_time_limit=config["phrase_limit"]
+                        )
 
-                        # Try recognition with the captured audio
-                        text = self.recognizer.recognize_google(audio)
-                        print(f"🎤 Recognition SUCCESS: '{text}'")
-                        self.recognized.emit(text.strip())
-                        return  # Success! Exit
+                        # Try Google recognition with language optimization
+                        try:
+                            text = self.recognizer.recognize_google(
+                                audio,
+                                language="en-US",
+                                show_all=False
+                            )
+                            if text and len(text.strip()) > 0:
+                                self.recognized.emit(text.strip())
+                                return
+                        except sr.UnknownValueError:
+                            # Continue to next attempt
+                            pass
+                        except sr.RequestError as e:
+                            # Continue to next attempt (might be temporary API issue)
+                            pass
 
                     except sr.WaitTimeoutError:
-                        print(f"🎤 Attempt {self.attempt_count}: No speech detected in {timeout}s")
-                        continue  # Try next attempt
-                    except sr.UnknownValueError:
-                        print(f"🎤 Attempt {self.attempt_count}: Could not understand audio")
-                        continue  # Try next attempt
-                    except sr.RequestError as e:
-                        print(f"🎤 Recognition service error: {e}")
-                        break  # Don't retry service errors
+                        # Try with more sensitive settings
+                        continue
+                    except Exception as e:
+                        continue
 
-                # Both attempts failed
+                # All attempts failed
                 if not self._should_stop:
-                    print("🎤 All recognition attempts failed")
-                    self.error.emit("Could not understand speech. Please speak clearly and try again.")
+                    self.error.emit("Could not understand speech. Please speak clearly.")
 
+        except FileNotFoundError:
+            if not self._should_stop:
+                self.error.emit("Microphone not found. Please check your microphone connection.")
         except Exception as e:
             if not self._should_stop:
-                print(f"🎤 Unexpected error: {e}")
-                self.error.emit(f"Microphone error: {str(e)}")
+                self.error.emit(f"Microphone setup failed: {str(e)}")
 
 
 class BlindModeManager(QObject):
@@ -400,7 +410,6 @@ class BlindModeManager(QObject):
             self.tts_worker.quit()
             # Wait with timeout to prevent GUI freeze
             if not self.tts_worker.wait(1000):  # Wait max 1 second
-                print("⚠️ TTS worker didn't stop gracefully, terminating...")
                 self.tts_worker.terminate()
                 self.tts_worker.wait(500)  # Brief wait for termination
             self.tts_worker = None
@@ -436,7 +445,6 @@ class BlindModeManager(QObject):
             self.speech_worker.quit()
             # Wait with timeout to prevent GUI freeze
             if not self.speech_worker.wait(1000):  # Wait max 1 second
-                print("⚠️ Speech worker didn't stop gracefully, terminating...")
                 self.speech_worker.terminate()
                 self.speech_worker.wait(500)  # Brief wait for termination
             self.speech_worker = None
@@ -464,70 +472,110 @@ class BlindModeManager(QObject):
         self.speak(full_text)
 
     def parse_command(self, text: str) -> Optional[str]:
-        """Parse recognized speech into a command with precise matching"""
+        """Parse recognized speech into a command with enhanced fuzzy matching"""
         original_text = text
         text = text.lower().strip()
-        print(f"🎯 Parsing command: '{original_text}' -> '{text}'")  # Debug
 
-        # EXACT MATCH FIRST - most reliable
-        # Option selection - be very precise to avoid mismatches
-        if text in ['a', 'option a', 'select a', 'choose a', 'letter a']:
-            print(f"🎯 Command parsed: OPTION_A")
-            return 'OPTION_A'
-        if text in ['b', 'option b', 'select b', 'choose b', 'letter b']:
-            print(f"🎯 Command parsed: OPTION_B")
-            return 'OPTION_B'
-        if text in ['c', 'option c', 'select c', 'choose c', 'letter c']:
-            print(f"🎯 Command parsed: OPTION_C")
-            return 'OPTION_C'
-        if text in ['d', 'option d', 'select d', 'choose d', 'letter d']:
-            print(f"🎯 Command parsed: OPTION_D")
-            return 'OPTION_D'
-        if text in ['e', 'option e', 'select e', 'choose e', 'letter e']:
-            print(f"🎯 Command parsed: OPTION_E")
-            return 'OPTION_E'
-        if text in ['f', 'option f', 'select f', 'choose f', 'letter f']:
-            print(f"🎯 Command parsed: OPTION_F")
-            return 'OPTION_F'
+        # Remove common filler words and normalize
+        filler_words = ['the', 'please', 'select', 'choose', 'go', 'to']
+        words = text.split()
+        cleaned_words = [word for word in words if word not in filler_words]
+        cleaned_text = ' '.join(cleaned_words) if cleaned_words else text
 
-        # Navigation commands - be strict to avoid mismatches like "previous" -> "C"
-        if text in ['next', 'next question', 'go next', 'forward']:
-            print(f"🎯 Command parsed: NEXT")
-            return 'NEXT'
-        if text in ['previous', 'prev', 'back', 'go back', 'previous question', 'backward']:
-            print(f"🎯 Command parsed: PREV")
-            return 'PREV'
+        # EXACT MATCHES FIRST - highest priority
 
-        # Action commands
-        if text in ['mark', 'mark for review', 'mark question', 'flag']:
-            print(f"🎯 Command parsed: MARK")
+        # Option selection with enhanced variations
+        option_patterns = {
+            'OPTION_A': [
+                'a', 'option a', 'letter a', 'ay', 'hey', 'eh', 'answer a',
+                'alpha', 'first option', 'option 1', 'one', 'first'
+            ],
+            'OPTION_B': [
+                'b', 'option b', 'letter b', 'be', 'bee', 'answer b',
+                'bravo', 'second option', 'option 2', 'two', 'second'
+            ],
+            'OPTION_C': [
+                'c', 'option c', 'letter c', 'see', 'sea', 'si', 'answer c',
+                'charlie', 'third option', 'option 3', 'three', 'third'
+            ],
+            'OPTION_D': [
+                'd', 'option d', 'letter d', 'dee', 'di', 'answer d',
+                'delta', 'fourth option', 'option 4', 'four', 'fourth'
+            ],
+            'OPTION_E': [
+                'e', 'option e', 'letter e', 'ee', 'answer e',
+                'echo', 'fifth option', 'option 5', 'five', 'fifth'
+            ],
+            'OPTION_F': [
+                'f', 'option f', 'letter f', 'eff', 'answer f',
+                'foxtrot', 'sixth option', 'option 6', 'six', 'sixth'
+            ]
+        }
+
+        # Check option patterns
+        for command, patterns in option_patterns.items():
+            if text in patterns or cleaned_text in patterns:
+                return command
+
+        # Navigation commands with variations
+        if any(phrase in text for phrase in ['next', 'forward', 'continue', 'move on']):
+            if 'question' in text or len(text.split()) <= 2:  # Avoid false positives
+                return 'NEXT'
+
+        if any(phrase in text for phrase in ['previous', 'prev', 'back', 'return', 'go back']):
+            if 'question' in text or len(text.split()) <= 2:
+                return 'PREV'
+
+        # Action commands with enhanced matching
+        if any(phrase in text for phrase in ['mark', 'flag', 'bookmark', 'review']):
             return 'MARK'
-        if text in ['repeat', 'repeat question', 'say again', 'again', 'read again']:
-            print(f"🎯 Command parsed: REPEAT")
+
+        if any(phrase in text for phrase in ['repeat', 'again', 'read again', 'say again', 'once more']):
             return 'REPEAT'
-        if text in ['clear', 'clear answer', 'remove answer', 'delete answer']:
-            print(f"🎯 Command parsed: CLEAR")
-            return 'CLEAR'
-        if text in ['submit', 'submit exam', 'finish', 'end exam']:
-            print(f"🎯 Command parsed: SUBMIT")
-            return 'SUBMIT'
-        if text in ['unanswered', 'go to unanswered', 'show unanswered', 'skip to unanswered']:
-            print(f"🎯 Command parsed: UNANSWERED")
+
+        if any(phrase in text for phrase in ['clear', 'remove', 'delete', 'erase', 'unselect']):
+            if 'answer' in text or len(text.split()) <= 2:
+                return 'CLEAR'
+
+        if any(phrase in text for phrase in ['submit', 'finish', 'done', 'complete', 'end']):
+            if any(word in text for word in ['exam', 'test', 'quiz']) or len(text.split()) <= 2:
+                return 'SUBMIT'
+
+        if any(phrase in text for phrase in ['unanswered', 'skipped', 'empty', 'blank']):
             return 'UNANSWERED'
 
-        # ONLY THEN try very conservative phonetic variations for single letters
-        # Only if the text is EXACTLY these common misheard versions
-        if text == 'be' or text == 'bee':
-            print(f"🎯 Phonetic match: OPTION_B (heard 'bee')")
-            return 'OPTION_B'
-        if text == 'see' or text == 'sea':
-            print(f"🎯 Phonetic match: OPTION_C (heard 'see')")
-            return 'OPTION_C'
-        if text == 'dee':
-            print(f"🎯 Phonetic match: OPTION_D (heard 'dee')")
-            return 'OPTION_D'
+        # FUZZY MATCHING for single letters (handle speech recognition errors)
+        single_letter_sounds = {
+            'OPTION_A': ['ay', 'hey', 'eh', 'aye', 'ey'],
+            'OPTION_B': ['be', 'bee', 'bi', 'beat', 'bea'],
+            'OPTION_C': ['see', 'sea', 'si', 'cee', 'key'],
+            'OPTION_D': ['dee', 'di', 'the', 'tea', 'de'],
+            'OPTION_E': ['ee', 'e', 'i', 'each', 'he'],
+            'OPTION_F': ['eff', 'ef', 'half', 'laugh', 'staff']
+        }
 
-        print(f"🎯 Command NOT recognized: '{text}'")
+        # Check single letter sounds only if it's a short phrase (avoid false positives)
+        if len(words) <= 2:
+            for command, sounds in single_letter_sounds.items():
+                if text in sounds or cleaned_text in sounds:
+                    return command
+
+        # PARTIAL MATCHING - if we hear part of a command
+        if len(text) >= 3:  # Minimum 3 characters to avoid false matches
+            if 'nex' in text:
+                return 'NEXT'
+            if 'pre' in text or 'bac' in text:
+                return 'PREV'
+            if 'mar' in text:
+                return 'MARK'
+            if 'rep' in text:
+                return 'REPEAT'
+            if 'cle' in text or 'cla' in text:
+                return 'CLEAR'
+            if 'sub' in text or 'fin' in text:
+                return 'SUBMIT'
+
+        # If no match found, return None
         return None
 
     def play_mic_on_beep(self):
@@ -681,22 +729,16 @@ class BlindModeManager(QObject):
             if command not in ['REPEAT', 'CLEAR', 'SUBMIT', 'UNANSWERED', 'NEXT', 'PREV', 'MARK'] and not command.startswith('OPTION_'):
                 self._set_state(BlindModeState.IDLE, f"Command {command} processed")
         else:
-            # Unrecognized command - provide more helpful guidance
-            suggestions = []
-            # Try to suggest what they might have meant
+            # Unrecognized command - provide helpful guidance
             if any(word in text.lower() for word in ['option', 'select', 'choose', 'answer']):
-                suggestions.append("Try saying just the letter: A, B, C, or D")
-            if any(word in text.lower() for word in ['go', 'move', 'continue']):
-                suggestions.append("Say 'next' or 'previous' to navigate")
-            if any(word in text.lower() for word in ['again', 'replay']):
-                suggestions.append("Say 'repeat' to hear the question again")
-
-            if suggestions:
-                error_msg = f"I heard '{text}' but didn't understand. {suggestions[0]}."
+                error_msg = "Try saying just the letter: A, B, C, or D."
+            elif any(word in text.lower() for word in ['go', 'move', 'continue']):
+                error_msg = "Say 'Next' or 'Back' to navigate."
+            elif any(word in text.lower() for word in ['again', 'replay']):
+                error_msg = "Say 'Repeat' to hear the question again."
             else:
-                error_msg = f"I heard '{text}' but that's not a recognized command. Say A, B, C, D to select an option. Or say Mark, Next, Previous, Repeat, or Clear."
+                error_msg = "Say: A, B, C, D, Next, Back, Mark, Clear, or Repeat."
 
-            print(f"📢 Speaking enhanced error guidance: {error_msg}")  # Debug
             self.speak(error_msg)
 
         # Return to IDLE (unless speak() changed state to SPEAKING) - only for error cases
@@ -713,18 +755,18 @@ class BlindModeManager(QObject):
         self.play_mic_off_beep()
 
         # Provide helpful feedback based on error type
-        if "timeout" in error_msg.lower():
-            # Normal timeout - just provide a gentle reminder
-            guidance = "No speech detected. Press space and speak when ready."
-        elif "Could not understand speech" in error_msg:
-            # Recognition failed - give specific guidance
-            guidance = "I'm having trouble understanding. Please speak clearly and say one of these: A, B, C, D, Mark, Next, Previous, Repeat, or Clear."
-        elif "understand" in error_msg.lower():
-            # Recognition got audio but couldn't parse it
-            guidance = "I heard you but couldn't understand. Try speaking more clearly. Say A for option A, or repeat for the question again."
+        if "Could not understand speech" in error_msg:
+            # Recognition failed after all attempts - give encouragement
+            guidance = "Try speaking more clearly. Say: A, B, C, D, Next, Back, Mark, Clear, or Repeat."
+        elif "Microphone not found" in error_msg:
+            # Hardware issue
+            guidance = "Microphone not detected. Please check your microphone connection and try again."
+        elif "setup failed" in error_msg:
+            # Setup issue
+            guidance = "Microphone setup failed. Please check your audio settings."
         else:
-            # Other errors
-            guidance = f"The microphone had an issue: {error_msg}. Press space to try again."
+            # Fallback for other errors
+            guidance = "Speech recognition issue. Press space to try again."
 
         # Speak the guidance
         self.speak(guidance)
