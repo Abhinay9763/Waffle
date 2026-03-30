@@ -65,7 +65,7 @@ export default async function ActivatePage({
                       </p>
                     </div>
                     <p className="text-xs text-zinc-600">
-                      You'll be able to sign in once the HOD approves your faculty account.
+                      You&apos;ll be able to sign in once the HOD approves your faculty account.
                     </p>
                   </div>
                 </div>

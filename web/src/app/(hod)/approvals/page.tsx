@@ -54,7 +54,7 @@ export default function FacultyApprovals() {
         const body = await res.json().catch(() => ({}));
         alert(body.detail ?? `Failed to ${action} faculty member`);
       }
-    } catch (error) {
+    } catch {
       alert(`Network error: Could not ${action} faculty member`);
     } finally {
       setProcessingId(null);

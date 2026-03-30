@@ -18,6 +18,20 @@ interface MyResponse {
   percentage: number;
 }
 
+interface TooltipItem {
+  value: number;
+  payload: {
+    score: number;
+    total: number;
+  };
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipItem[];
+  label?: string;
+}
+
 function fmtShort(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
@@ -32,7 +46,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   );
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs shadow-xl">

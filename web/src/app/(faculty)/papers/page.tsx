@@ -1,9 +1,10 @@
 "use client";
 
+import type { ChangeEvent } from "react";
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
-import { FileDown, FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import { Download, FileDown, FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { API } from "@/lib/config";
 
 interface Paper {
@@ -37,16 +38,29 @@ export default function PapersPage() {
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const loadPapers = async () => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) {
+      setPapers([]);
+      setLoading(false);
+      return;
+    }
+
+    const res = await fetch(`${API}/paper/list`, { headers: { "x-session-token": token } }).catch(() => null);
+    if (!res?.ok) {
+      setPapers([]);
+      setLoading(false);
+      return;
+    }
+    const d = await res.json().catch(() => ({ papers: [] }));
+    setPapers(d.papers ?? []);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const token = getCookie("wfl-session") as string | undefined;
-    if (!token) { setLoading(false); return; }
-
-    fetch(`${API}/paper/list`, { headers: { "x-session-token": token } })
-      .then((r) => (r.ok ? r.json() : { papers: [] }))
-      .then((d) => setPapers(d.papers ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    loadPapers();
   }, []);
 
   const handleDownload = async (paper: Paper) => {
@@ -76,6 +90,91 @@ export default function PapersPage() {
     setPapers(prev => prev.filter(p => p.id !== paper.id));
   };
 
+  const handleImport = async (file: File) => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) {
+      alert("Session expired. Please log in again.");
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      alert("Please upload an .xlsx file.");
+      return;
+    }
+
+    const form = new FormData();
+    form.append("file", file);
+    setImporting(true);
+    const res = await fetch(`${API}/paper/import`, {
+      method: "POST",
+      headers: { "x-session-token": token },
+      body: form,
+    }).catch(() => null);
+    setImporting(false);
+
+    if (!res) {
+      alert("Network error while importing paper.");
+      return;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const detail = body?.detail;
+      if (typeof detail === "string") {
+        alert(detail);
+        return;
+      }
+      if (detail && typeof detail === "object") {
+        const message = typeof detail.message === "string" ? detail.message : `Import failed (${res.status})`;
+        const errors = Array.isArray(detail.errors) ? detail.errors : [];
+        const extra = typeof detail.error_count === "number" && detail.error_count > errors.length
+          ? `\n...and ${detail.error_count - errors.length} more error(s).`
+          : "";
+        alert(`${message}${errors.length ? `\n\n- ${errors.join("\n- ")}` : ""}${extra}`);
+        return;
+      }
+      alert(`Import failed (${res.status})`);
+      return;
+    }
+
+    await loadPapers();
+  };
+
+  const handleImportInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+
+    // Reset immediately so selecting same file again still triggers onChange.
+    input.value = "";
+
+    if (file) {
+      void handleImport(file);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) {
+      alert("Session expired. Please log in again.");
+      return;
+    }
+
+    const res = await fetch(`${API}/paper/template/question_paper_template.xlsx`, {
+      headers: { "x-session-token": token },
+    }).catch(() => null);
+    if (!res?.ok) {
+      const body = await res?.json().catch(() => ({}));
+      alert(body?.detail ?? "Template not available yet.");
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "question_paper_template.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -88,13 +187,34 @@ export default function PapersPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
         <p className="text-zinc-500 text-sm">No question papers yet.</p>
-        <Link
-          href="/papers/new"
-          className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create your first paper
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-2 border border-zinc-700 hover:border-zinc-500 text-zinc-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Download template
+          </button>
+          <label className="flex items-center gap-2 border border-zinc-700 hover:border-zinc-500 text-zinc-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors cursor-pointer">
+            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {importing ? "Importing..." : "Import paper"}
+            <input
+              type="file"
+              accept=".xlsx"
+              className="hidden"
+              disabled={importing}
+              onChange={handleImportInputChange}
+            />
+          </label>
+          <Link
+            href="/papers/new"
+            className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create your first paper
+          </Link>
+        </div>
       </div>
     );
   }
@@ -115,6 +235,25 @@ export default function PapersPage() {
             <Plus className="w-3.5 h-3.5" />
             New paper
           </Link>
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Template
+          </button>
+          <label className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors cursor-pointer">
+            {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            {importing ? "Importing..." : "Import paper"}
+            <input
+              type="file"
+              accept=".xlsx"
+              className="hidden"
+              disabled={importing}
+              onChange={handleImportInputChange}
+            />
+          </label>
         </div>
 
         <div className="rounded-xl border border-zinc-800 overflow-hidden">

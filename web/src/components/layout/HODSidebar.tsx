@@ -61,7 +61,7 @@ export default function HODSidebar() {
         setUser(raw ? JSON.parse(raw) : sessionData.user);
         setIsAuthenticating(false);
 
-      } catch (error) {
+      } catch {
         // Network error or other issue
         deleteCookie("wfl-session");
         deleteCookie("wfl-user");

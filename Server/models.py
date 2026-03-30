@@ -27,8 +27,6 @@ class Login(BaseModel):
     email : str
     password : str
 
-
-
 class QuestionPaper(BaseModel):
     id : Optional[int] = None
     questions : dict

@@ -41,6 +41,37 @@ interface BuilderState {
   _nextSId: number;
 }
 
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  [index: number]: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionEventLike {
+  results: {
+    [index: number]: SpeechRecognitionResultLike;
+  };
+}
+
+interface SpeechRecognitionErrorEventLike {
+  error?: string;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
 type Action =
   | { type: "SET_NAME"; name: string }
   | { type: "GO_TO"; id: number }
@@ -563,9 +594,9 @@ const STATUS_STYLE = {
 };
 
 function NavPanel({
-  sections, activeId, totalQ, dispatch, readonly,
+  sections, activeId, dispatch, readonly,
 }: {
-  sections: BuilderSection[]; activeId: number | null; totalQ: number;
+  sections: BuilderSection[]; activeId: number | null;
   dispatch: React.Dispatch<Action>; readonly?: boolean;
 }) {
   let palIdx = 0;
@@ -695,11 +726,15 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
   const [sttActive, setSttActive] = useState(false);
   const [sttSupported, setSttSupported] = useState(true);
   const [sttError, setSttError] = useState<string | null>(null);
-  const srRef = useRef<any>(null);
+  const srRef = useRef<SpeechRecognitionLike | null>(null);
   const capturedFocus = useRef<{ field: string; start: number; end: number; val: string } | null>(null);
 
   useEffect(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as Window & {
+      SpeechRecognition?: SpeechRecognitionCtor;
+      webkitSpeechRecognition?: SpeechRecognitionCtor;
+    };
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SR) setSttSupported(false);
   }, []);
 
@@ -719,12 +754,20 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
       val:   el.value,
     };
     // Fresh instance every time — reusing a spent recognition fires onend immediately
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as Window & {
+      SpeechRecognition?: SpeechRecognitionCtor;
+      webkitSpeechRecognition?: SpeechRecognitionCtor;
+    };
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SR) {
+      setSttSupported(false);
+      return;
+    }
     const r = new SR();
     r.continuous = false;
     r.interimResults = false;
     r.lang = "en-IN";
-    r.onresult = (e: any) => {
+    r.onresult = (e: SpeechRecognitionEventLike) => {
       const transcript: string = e.results[0][0].transcript;
       const c = capturedFocus.current;
       if (c) {
@@ -738,7 +781,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
       }
       setSttActive(false);
     };
-    r.onerror = (e: any) => { setSttError(e.error ?? "error"); setSttActive(false); };
+    r.onerror = (e: SpeechRecognitionErrorEventLike) => { setSttError(e.error ?? "error"); setSttActive(false); };
     r.onend   = () => setSttActive(false);
     srRef.current = r;
     try { r.start(); setSttActive(true); } catch { setSttActive(false); }
@@ -937,7 +980,6 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
         <NavPanel
           sections={state.sections}
           activeId={state.activeId}
-          totalQ={totalQ}
           dispatch={dispatch}
           readonly={inUse}
         />

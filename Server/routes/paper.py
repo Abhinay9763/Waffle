@@ -1,3 +1,4 @@
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -5,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from starlette.status import HTTP_201_CREATED, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT
 import httpx
 from io import BytesIO
+from openpyxl import load_workbook
 
 from deps import get_current_user
 from models import QuestionPaper
@@ -14,6 +16,181 @@ from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 router = APIRouter()
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "template"
+
+
+def _normalize_option(value) -> int | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+
+    # Accept A-D, 0-3, 1-4
+    upper = s.upper()
+    if upper in {"A", "B", "C", "D"}:
+        return {"A": 0, "B": 1, "C": 2, "D": 3}[upper]
+    if s in {"0", "1", "2", "3"}:
+        return int(s)
+    if s in {"1", "2", "3", "4"}:
+        return int(s) - 1
+    return None
+
+
+def _parse_import_workbook(raw: bytes):
+    try:
+        wb = load_workbook(filename=BytesIO(raw), data_only=True)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Could not read Excel file.",
+                "errors": ["Upload a valid .xlsx template file."],
+            },
+        )
+    ws = wb.active
+
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 2:
+        raise HTTPException(status_code=400, detail="Import file has no question rows.")
+
+    headers = [str(h).strip().lower() if h is not None else "" for h in rows[0]]
+    header_map = {h: i for i, h in enumerate(headers) if h}
+
+    required = [
+        "section", "question", "option_a", "option_b", "option_c", "option_d",
+        "correct_option", "marks", "negative_marks",
+    ]
+    missing = [k for k in required if k not in header_map]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Missing required columns.",
+                "errors": [f"Missing required columns: {', '.join(missing)}"],
+            },
+        )
+
+    exam_name = "Imported Paper"
+    if "exam_name" in header_map:
+        for r in rows[1:]:
+            candidate = r[header_map["exam_name"]] if header_map["exam_name"] < len(r) else None
+            if candidate and str(candidate).strip():
+                exam_name = str(candidate).strip()
+                break
+
+    sections_by_name: dict[str, dict] = {}
+    section_order: list[str] = []
+    answers: dict[int, int] = {}
+    q_id = 1
+    validation_errors: list[str] = []
+
+    last_section_name = ""
+    for idx, r in enumerate(rows[1:], start=2):
+        section_name = str(r[header_map["section"]]).strip() if header_map["section"] < len(r) and r[header_map["section"]] is not None else ""
+        question_text = str(r[header_map["question"]]).strip() if header_map["question"] < len(r) and r[header_map["question"]] is not None else ""
+
+        if not section_name and not question_text:
+            continue
+
+        # Allow faculty to leave repeated section cells blank; carry forward previous value.
+        if not section_name:
+            section_name = last_section_name
+        else:
+            last_section_name = section_name
+
+        if not section_name:
+            validation_errors.append(f"Row {idx}: section is required for the first row of a section block.")
+            continue
+        if not question_text:
+            validation_errors.append(f"Row {idx}: question is required.")
+            continue
+
+        options = []
+        row_has_option_error = False
+        for key in ("option_a", "option_b", "option_c", "option_d"):
+            value = r[header_map[key]] if header_map[key] < len(r) else None
+            text = "" if value is None else str(value).strip()
+            if not text:
+                validation_errors.append(f"Row {idx}: {key} is required.")
+                row_has_option_error = True
+            options.append(text)
+        if row_has_option_error:
+            continue
+
+        correct_raw = r[header_map["correct_option"]] if header_map["correct_option"] < len(r) else None
+        correct_idx = _normalize_option(correct_raw)
+        if correct_idx is None:
+            validation_errors.append(f"Row {idx}: correct_option must be A-D or 1-4.")
+            continue
+
+        marks_raw = r[header_map["marks"]] if header_map["marks"] < len(r) else None
+        neg_raw = r[header_map["negative_marks"]] if header_map["negative_marks"] < len(r) else None
+        try:
+            marks = int(marks_raw)
+            negative_marks = int(neg_raw)
+        except Exception:
+            validation_errors.append(f"Row {idx}: marks/negative_marks must be integers.")
+            continue
+
+        if section_name not in sections_by_name:
+            section_order.append(section_name)
+            sections_by_name[section_name] = {
+                "section_id": len(section_order),
+                "name": section_name,
+                "questions": [],
+            }
+
+        sections_by_name[section_name]["questions"].append({
+            "question_id": q_id,
+            "text": question_text,
+            "options": options,
+            "correct_option": correct_idx,
+            "marks": marks,
+            "negative_marks": negative_marks,
+        })
+        answers[q_id] = correct_idx
+        q_id += 1
+
+    sections = [sections_by_name[name] for name in section_order]
+    if validation_errors:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Import validation failed.",
+                "errors": validation_errors[:25],
+                "error_count": len(validation_errors),
+            },
+        )
+
+    if not sections:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "No valid question rows were found.",
+                "errors": ["Fill at least one valid question row in the template."],
+            },
+        )
+
+    total_marks = sum(
+        q.get("marks", 0)
+        for s in sections
+        for q in s.get("questions", [])
+    )
+
+    return {
+        "questions": {
+            "meta": {
+                "exam_name": exam_name,
+                "student_roll": None,
+                "start_time": "",
+                "end_time": "",
+                "total_marks": total_marks,
+            },
+            "sections": sections,
+        },
+        "answers": answers,
+    }
 
 
 def collect_image_urls(questions_dict: dict) -> set[str]:
@@ -35,6 +212,47 @@ async def createPaper(paper: QuestionPaper, user=Depends(get_current_user)):
     data["creator_id"] = user["id"]
     response = await db.client.table("QuestionPapers").insert(data).execute()
     return {"msg": "Paper created", "id": response.data[0]["id"]}
+
+
+@router.post("/paper/import", status_code=HTTP_201_CREATED)
+async def importPaper(file: UploadFile = File(...), user=Depends(get_current_user)):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Please upload a valid .xlsx file.")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    parsed = _parse_import_workbook(raw)
+    response = await db.client.table("QuestionPapers").insert({
+        "questions": parsed["questions"],
+        "answers": parsed["answers"],
+        "creator_id": user["id"],
+    }).execute()
+    return {
+        "msg": "Paper imported",
+        "id": response.data[0]["id"],
+        "question_count": len(parsed["answers"]),
+    }
+
+
+@router.get("/paper/template/{template_name}")
+async def downloadTemplate(template_name: str, user=Depends(get_current_user)):
+    base = TEMPLATE_DIR.resolve()
+    target = (base / template_name).resolve()
+    if not str(target).startswith(str(base)):
+        raise HTTPException(status_code=400, detail="Invalid template path.")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Template not found.")
+
+    media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    with target.open("rb") as f:
+        data = f.read()
+    return StreamingResponse(
+        iter([data]),
+        media_type=media,
+        headers={"Content-Disposition": f"attachment; filename={target.name}"},
+    )
 
 
 @router.get("/paper/list")
@@ -72,7 +290,7 @@ async def listPapers(user=Depends(get_current_user)):
     return {"papers": papers}
 
 
-@router.get("/paper/{paper_id}")
+@router.get("/paper/{paper_id:int}")
 async def getPaper(paper_id: int, user=Depends(get_current_user)):
     paper_res = await db.client.table("QuestionPapers") \
         .select("*") \
@@ -93,7 +311,7 @@ async def getPaper(paper_id: int, user=Depends(get_current_user)):
     return paper
 
 
-@router.put("/paper/{paper_id}")
+@router.put("/paper/{paper_id:int}")
 async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_current_user)):
     existing = await db.client.table("QuestionPapers") \
         .select("id,questions") \
@@ -127,7 +345,7 @@ async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_curr
     return {"msg": "Paper updated"}
 
 
-@router.delete("/paper/{paper_id}")
+@router.delete("/paper/{paper_id:int}")
 async def deletePaper(paper_id: int, user=Depends(get_current_user)):
     existing = await (db.client.table("QuestionPapers").select("id,questions").eq("id", paper_id).eq("creator_id", user["id"])
                       .execute())
@@ -150,8 +368,12 @@ async def deletePaper(paper_id: int, user=Depends(get_current_user)):
     await db.client.table("QuestionPapers").delete().eq("id", paper_id).execute()
     return {"msg": "Paper deleted"}
 
+#
+# @router.post("/paper/{paper_id}",status_code=HTTP_201_CREATED)
+# async def importPaper():
+#     pass
 
-@router.post("/paper/{paper_id}/clone", status_code=HTTP_201_CREATED)
+@router.post("/paper/{paper_id:int}/clone", status_code=HTTP_201_CREATED)
 async def clonePaper(paper_id: int, user=Depends(get_current_user)):
     original = await (db.client.table("QuestionPapers").select("questions,answers").eq("id", paper_id).eq("creator_id", user["id"])
                       .execute())
@@ -188,7 +410,7 @@ async def uploadImage(file: UploadFile = File(...), user=Depends(get_current_use
     return {"url": url}
 
 
-@router.get("/paper/{paper_id}/download")
+@router.get("/paper/{paper_id:int}/download")
 async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
     """Generate and download a Word document for the question paper with embedded images."""
     # Get the paper

@@ -6,13 +6,6 @@ import { Users, UserCheck, UserX, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { API } from "@/lib/config";
 
-interface PendingFaculty {
-  id: number;
-  name: string;
-  email: string;
-  created_at: string;
-}
-
 export default function HODDashboard() {
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);

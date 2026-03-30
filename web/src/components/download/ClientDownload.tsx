@@ -71,7 +71,7 @@ export default function ClientDownload() {
       setTimeout(() => {
         setDownloading(false);
       }, 2000);
-    } catch (err) {
+    } catch {
       setDownloading(false);
       setError("Failed to start download. Please try again.");
     }
@@ -218,7 +218,7 @@ export default function ClientDownload() {
                 {/* Release notes */}
                 {versionInfo.release_notes && (
                   <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-2">
-                    <h3 className="text-sm font-medium text-zinc-300">What's New</h3>
+                    <h3 className="text-sm font-medium text-zinc-300">What&apos;s New</h3>
                     <p className="text-sm text-zinc-400 leading-relaxed">
                       {versionInfo.release_notes}
                     </p>
