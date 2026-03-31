@@ -46,6 +46,10 @@ function fmtSecsAgo(secs: number) {
   return `${Math.floor(secs / 3600)}h ago`;
 }
 
+function normalizeEventKey(event: string) {
+  return event.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
 function timeLeft(endIso: string) {
   const diff = Math.max(0, Math.floor((new Date(endIso).getTime() - Date.now()) / 1000));
   if (diff === 0) return "Ended";
@@ -58,10 +62,29 @@ function timeLeft(endIso: string) {
 }
 
 const EVENT_META: Record<string, { label: string; dot: string; text: string }> = {
-  joined:         { label: "joined",         dot: "bg-emerald-500", text: "text-emerald-400" },
-  submitted:      { label: "submitted",      dot: "bg-yellow-400",  text: "text-yellow-400"  },
-  retake_granted: { label: "retake granted", dot: "bg-purple-400",  text: "text-purple-400"  },
+  joined:                 { label: "joined exam",                          dot: "bg-emerald-500", text: "text-emerald-400" },
+  submitted:              { label: "submitted exam",                       dot: "bg-yellow-400",  text: "text-yellow-400"  },
+  retake_granted:         { label: "retake granted",                       dot: "bg-purple-400",  text: "text-purple-400"  },
+  tab_hidden:             { label: "warned: loss of tab focus",            dot: "bg-amber-500",   text: "text-amber-300"   },
+  focus_lost:             { label: "warned: app lost window focus",        dot: "bg-amber-500",   text: "text-amber-300"   },
+  fullscreen_exit:        { label: "warned: exited fullscreen",            dot: "bg-amber-500",   text: "text-amber-300"   },
+  copy_attempt:           { label: "warned: copy attempt blocked",         dot: "bg-amber-500",   text: "text-amber-300"   },
+  paste_attempt:          { label: "warned: paste attempt blocked",        dot: "bg-amber-500",   text: "text-amber-300"   },
+  screenshot_suspected:   { label: "warned: screenshot suspected",         dot: "bg-amber-500",   text: "text-amber-300"   },
+  warning_issued:         { label: "warning issued",                       dot: "bg-orange-500",  text: "text-orange-300"  },
+  lock_started:           { label: "penalty lock started",                 dot: "bg-red-500",     text: "text-red-300"     },
+  lock_ended:             { label: "penalty lock ended",                   dot: "bg-zinc-500",    text: "text-zinc-400"    },
+  auto_submitted_policy:  { label: "auto-submitted: policy violation",     dot: "bg-red-500",     text: "text-red-300"     },
+  blind_mode_enabled:     { label: "blind mode enabled",                   dot: "bg-sky-500",     text: "text-sky-300"     },
+  blind_mode_disabled:    { label: "blind mode disabled",                  dot: "bg-sky-500",     text: "text-sky-300"     },
 };
+
+function prettifyEventName(event: string) {
+  return event
+    .trim()
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ");
+}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -293,7 +316,8 @@ export default function LiveControlCentre() {
           ) : (
             <ul className="space-y-3">
               {logs.map((l, i) => {
-                const meta = EVENT_META[l.event] ?? { label: l.event, dot: "bg-zinc-500", text: "text-zinc-400" };
+                const eventKey = normalizeEventKey(l.event);
+                const meta = EVENT_META[eventKey] ?? { label: prettifyEventName(l.event), dot: "bg-zinc-500", text: "text-zinc-400" };
                 return (
                   <li key={i} className="flex items-start gap-2.5 text-xs">
                     <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
