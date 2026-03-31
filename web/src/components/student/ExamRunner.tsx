@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCookie } from "cookies-next";
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Eraser, Flag, Info, Loader2, Save, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Eraser, Flag, Loader2, Send } from "lucide-react";
 import ExamTimer from "@/components/student/ExamTimer";
 import QuestionPalette from "@/components/student/QuestionPalette";
 import QuestionView from "@/components/student/QuestionView";
@@ -18,7 +18,6 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
   const [activeIdx, setActiveIdx] = useState(0);
   const [responses, setResponses] = useState<Record<number, QuestionResponse>>({});
-  const [showTracker, setShowTracker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -43,6 +42,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const secureModeReachedRef = useRef(false);
   const pendingDeltaRef = useRef<Record<number, QuestionResponse>>({});
   const lastFullSyncAtRef = useRef(0);
+  const warningCountRef = useRef(0);
 
   const maxWarnings = Math.max(1, Number((exam.meta as ExamStructure["meta"] & { max_warnings?: number }).max_warnings ?? 3));
 
@@ -59,19 +59,25 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     [responses],
   );
 
-  const tracker = useMemo(() => {
-    return {
-      meta: {
-        exam_id: exam.meta.exam_id,
-        exam_name: exam.meta.exam_name,
-        generated_at: new Date().toISOString(),
-      },
-      current_question_id: active?.question_id ?? null,
-      responses: Object.values(responses),
-    };
-  }, [exam.meta.exam_id, exam.meta.exam_name, active?.question_id, responses]);
-
   const token = (getCookie("wfl-session") as string | undefined) ?? "";
+  const studentRoll = useMemo(() => {
+    const raw = getCookie("wfl-user") as string | undefined;
+    if (!raw) return "";
+    try {
+      const parsed = JSON.parse(raw) as { roll?: string };
+      return parsed.roll ?? "";
+    } catch {
+      return "";
+    }
+  }, []);
+
+  useEffect(() => {
+    warningCountRef.current = warningCount;
+  }, [warningCount]);
+
+  useEffect(() => {
+    secureModeReachedRef.current = false;
+  }, [exam.meta.exam_id]);
 
   const requestExamFullscreen = useCallback(async () => {
     const el = document.documentElement as HTMLElement & {
@@ -120,10 +126,10 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
   const buildSubmission = useCallback(() => {
     return {
-      student_roll: "",
+      student_roll: studentRoll,
       responses: Object.values(responses),
     };
-  }, [responses]);
+  }, [responses, studentRoll]);
 
   const sendHeartbeat = useCallback(async () => {
     if (!token || submitted || submitting) return;
@@ -142,7 +148,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     } = {
       exam_id: exam.meta.exam_id,
       events: eventsToSend,
-      warning_count: warningCount,
+      warning_count: warningCountRef.current,
     };
 
     if (shouldSendFullSnapshot) {
@@ -184,10 +190,11 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
     setAutosaveState("saved");
     setLastSavedAt(new Date().toLocaleTimeString());
-  }, [token, submitted, submitting, exam.meta.exam_id, buildSubmission, warningCount]);
+  }, [token, submitted, submitting, exam.meta.exam_id, buildSubmission]);
 
   const submitExam = useCallback(async (reason: "manual" | "timeup" = "manual") => {
-    if (!token || submitted || submitting) return;
+    if (!token || submittedRef.current || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitError(null);
     setSubmitting(true);
 
@@ -207,16 +214,19 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       const body = await res?.json().catch(() => ({}));
       setSubmitError(body?.detail ?? "Could not submit. Please try again.");
       setSubmitting(false);
+      submittingRef.current = false;
       return;
     }
 
+    submittedRef.current = true;
     setSubmitted(true);
     setSubmitting(false);
+    submittingRef.current = false;
     if (reason === "timeup") {
       alert("Time is up. Your exam has been submitted.");
     }
     router.push("/history");
-  }, [token, submitted, submitting, exam.meta.exam_id, buildSubmission, router]);
+  }, [token, exam.meta.exam_id, buildSubmission, router]);
 
   const clearOutOfFocusTermination = useCallback(() => {
     if (outOfFocusTimeoutRef.current) {
@@ -282,7 +292,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       const payload = {
         exam_id: exam.meta.exam_id,
         response: {
-          student_roll: "",
+          student_roll: studentRoll,
           responses: Object.values(responsesRef.current),
         },
       };
@@ -315,7 +325,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       window.removeEventListener("beforeunload", onBeforeUnload);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [token, exam.meta.exam_id]);
+  }, [token, exam.meta.exam_id, studentRoll]);
 
   useEffect(() => {
     if (submitted || submitting) {
@@ -352,7 +362,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     eventQueueRef.current.push({ event });
     eventQueueRef.current.push({ event: "warning_issued" });
 
-    const nextWarnings = warningCount + 1;
+    const nextWarnings = warningCountRef.current + 1;
+    warningCountRef.current = nextWarnings;
     setWarningCount(nextWarnings);
 
     setLockReason(reason);
@@ -365,7 +376,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       eventQueueRef.current.push({ event: "auto_submitted_policy" });
       void submitExam("manual");
     }
-  }, [warningCount, maxWarnings, sendHeartbeat, submitExam]);
+  }, [maxWarnings, sendHeartbeat, submitExam]);
 
   useEffect(() => {
     if (!token) return;
@@ -465,8 +476,15 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     });
   };
 
-  const onTimeUp = () => {
+  const onTimeUp = useCallback(() => {
     void submitExam("timeup");
+  }, [submitExam]);
+
+  const onBackClick = () => {
+    if (submitting) return;
+    const yes = window.confirm("Leave exam and submit current answers? You cannot continue this attempt afterward.");
+    if (!yes) return;
+    void submitExam("manual");
   };
 
   if (!active) {
@@ -523,9 +541,14 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/60 px-5 py-3">
-          <Link href="/student" className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200">
+          <button
+            type="button"
+            onClick={onBackClick}
+            disabled={submitting}
+            className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+          >
             <ArrowLeft className="h-4 w-4" /> Back
-          </Link>
+          </button>
           <div className="h-5 w-px bg-zinc-800" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-zinc-100">{exam.meta.exam_name}</h1>
@@ -614,25 +637,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
             </div>
 
             <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/30 p-3">
-              <button
-                type="button"
-                onClick={() => setShowTracker((v) => !v)}
-                className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200"
-              >
-                <Save className="h-3.5 w-3.5" />
-                {showTracker ? "Hide" : "Show"} answer tracker JSON
-              </button>
-              {showTracker && (
-                <pre className="mt-2 max-h-48 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-[11px] text-zinc-300">
-{JSON.stringify(tracker, null, 2)}
-                </pre>
-              )}
-              <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-zinc-500">
-                <Info className="h-3.5 w-3.5" />
-                Phase-2 mode: heartbeat autosave and final submit are live.
-              </p>
               {submitError && (
-                <p className="mt-2 text-xs text-red-400">{submitError}</p>
+                <p className="text-xs text-red-400">{submitError}</p>
               )}
             </div>
           </section>

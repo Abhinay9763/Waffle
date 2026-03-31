@@ -14,6 +14,28 @@ export function middleware(req: NextRequest) {
     url.searchParams.set("from", pathname);
     return NextResponse.redirect(url);
   }
+
+  if (pathname.startsWith("/exam/")) {
+    const rawUser = req.cookies.get("wfl-user")?.value;
+    if (!rawUser) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+    try {
+      const parsed = JSON.parse(rawUser) as { role?: string };
+      if (parsed.role !== "Student") {
+        const url = req.nextUrl.clone();
+        url.pathname = "/login";
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      const url = req.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return NextResponse.next();
 }
 

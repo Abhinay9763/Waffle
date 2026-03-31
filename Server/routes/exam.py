@@ -101,6 +101,9 @@ async def availableExams(user=Depends(get_current_user)):
 @router.get("/exam/{exam_id}/take")
 async def takeExam(exam_id: int, user=Depends(get_current_user)):
     """Return full exam + paper data for a student to take."""
+    if user.get("role") != "Student":
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Only students can take exams.")
+
     try:
         exam_res = await db.client.table("Exams") \
             .select("name,total_marks,start,end,questionpaper_id,join_window,max_warnings") \

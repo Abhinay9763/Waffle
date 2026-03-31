@@ -166,6 +166,14 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
 @router.post("/response/submit", status_code=HTTP_200_OK)
 async def submitResponse(sub: Submit, user=Depends(get_current_user)):
     """Finalise the exam — called once on submit or when time runs out."""
+    existing = await db.client.table("Responses") \
+        .select("status") \
+        .eq("exam_id", sub.exam_id) \
+        .eq("user_id", user["id"]) \
+        .execute()
+    if existing.data and existing.data[0].get("status") == "submitted":
+        return {"msg": "Response already submitted."}
+
     now = datetime.now(timezone.utc).isoformat()
     await db.client.table("Responses").upsert(
         {
