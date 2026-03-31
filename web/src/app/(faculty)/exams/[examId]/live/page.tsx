@@ -104,14 +104,45 @@ export default function LiveControlCentre() {
   const [, tick] = useState(0); // forces 1s re-render for live countdowns
 
   const token = useRef<string>("");
+  const lastLogAtRef = useRef<string | null>(null);
+
+  const mergeLogs = useCallback((incoming: LogEntry[], incremental: boolean) => {
+    if (!incremental) {
+      setLogs(incoming ?? []);
+      if (incoming.length > 0) {
+        lastLogAtRef.current = incoming[0].created_at;
+      }
+      return;
+    }
+
+    if (!incoming || incoming.length === 0) return;
+    setLogs((prev) => {
+      const seen = new Set(prev.map((l) => `${l.created_at}|${l.event}|${l.Users?.roll ?? ""}`));
+      const appended = [...incoming].filter((l) => {
+        const key = `${l.created_at}|${l.event}|${l.Users?.roll ?? ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (appended.length === 0) return prev;
+      return [...appended.reverse(), ...prev].slice(0, 300);
+    });
+
+    lastLogAtRef.current = incoming[incoming.length - 1].created_at;
+  }, []);
 
   const fetchAll = useCallback(async (isInit = false) => {
     if (!isInit) setPolling(true);
     const t = token.current;
     try {
+      const since = !isInit ? lastLogAtRef.current : null;
+      const logsUrl = since
+        ? `${API}/exam/${examId}/logs?since=${encodeURIComponent(since)}`
+        : `${API}/exam/${examId}/logs`;
+
       const [liveRes, logRes] = await Promise.all([
         fetch(`${API}/exam/${examId}/live`,  { headers: { "x-session-token": t } }),
-        fetch(`${API}/exam/${examId}/logs`,  { headers: { "x-session-token": t } }),
+        fetch(logsUrl,  { headers: { "x-session-token": t } }),
       ]);
       if (!liveRes.ok) { setError("Could not load exam data."); return; }
       const live = await liveRes.json();
@@ -120,7 +151,7 @@ export default function LiveControlCentre() {
       setActive(live.active ?? []);
       setIdle(live.idle ?? []);
       setSubmitted(live.submitted ?? []);
-      setLogs(logData.logs ?? []);
+      mergeLogs(logData.logs ?? [], !isInit && !!since);
       setError(null);
     } catch {
       setError("Could not reach the server.");
@@ -128,10 +159,11 @@ export default function LiveControlCentre() {
       setLoading(false);
       setPolling(false);
     }
-  }, [examId]);
+  }, [examId, mergeLogs]);
 
   useEffect(() => {
     token.current = (getCookie("wfl-session") as string | undefined) ?? "";
+    lastLogAtRef.current = null;
     fetchAll(true);
     const poll = setInterval(() => fetchAll(), POLL_MS);
     const clock = setInterval(() => tick((n) => n + 1), 1000);

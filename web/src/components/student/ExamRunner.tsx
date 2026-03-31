@@ -41,6 +41,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const outOfFocusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const outOfFocusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const secureModeReachedRef = useRef(false);
+  const pendingDeltaRef = useRef<Record<number, QuestionResponse>>({});
+  const lastFullSyncAtRef = useRef(0);
 
   const maxWarnings = Math.max(1, Number((exam.meta as ExamStructure["meta"] & { max_warnings?: number }).max_warnings ?? 3));
 
@@ -128,6 +130,27 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     if (heartbeatInFlightRef.current) return;
 
     const eventsToSend = eventQueueRef.current.splice(0, eventQueueRef.current.length);
+    const deltaEntries = Object.values(pendingDeltaRef.current);
+    const now = Date.now();
+    const shouldSendFullSnapshot = lastFullSyncAtRef.current === 0 || (now - lastFullSyncAtRef.current) >= 90_000;
+    const payload: {
+      exam_id: number;
+      events: Array<{ event: string }>;
+      warning_count: number;
+      response?: { student_roll: string; responses: QuestionResponse[] };
+      response_delta?: QuestionResponse[];
+    } = {
+      exam_id: exam.meta.exam_id,
+      events: eventsToSend,
+      warning_count: warningCount,
+    };
+
+    if (shouldSendFullSnapshot) {
+      payload.response = buildSubmission();
+    } else if (deltaEntries.length > 0) {
+      payload.response_delta = deltaEntries;
+    }
+
     heartbeatInFlightRef.current = true;
 
     setAutosaveState("saving");
@@ -137,12 +160,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
         "Content-Type": "application/json",
         "x-session-token": token,
       },
-      body: JSON.stringify({
-        exam_id: exam.meta.exam_id,
-        response: buildSubmission(),
-        events: eventsToSend,
-        warning_count: warningCount,
-      }),
+      body: JSON.stringify(payload),
     }).catch(() => null);
 
     heartbeatInFlightRef.current = false;
@@ -153,6 +171,15 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       }
       setAutosaveState("error");
       return;
+    }
+
+    if (shouldSendFullSnapshot) {
+      lastFullSyncAtRef.current = now;
+      pendingDeltaRef.current = {};
+    } else if (deltaEntries.length > 0) {
+      for (const d of deltaEntries) {
+        delete pendingDeltaRef.current[d.question_id];
+      }
     }
 
     setAutosaveState("saved");
@@ -423,14 +450,18 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const setAnswer = (questionId: number, option: number | null) => {
     setResponses((prev) => {
       const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
-      return { ...prev, [questionId]: { ...curr, option } };
+      const next = { ...curr, option };
+      pendingDeltaRef.current[questionId] = next;
+      return { ...prev, [questionId]: next };
     });
   };
 
   const toggleMark = (questionId: number) => {
     setResponses((prev) => {
       const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
-      return { ...prev, [questionId]: { ...curr, marked: !curr.marked } };
+      const next = { ...curr, marked: !curr.marked };
+      pendingDeltaRef.current[questionId] = next;
+      return { ...prev, [questionId]: next };
     });
   };
 

@@ -54,7 +54,8 @@ class Response(BaseModel):
 
 class Heartbeat(BaseModel):
     exam_id: int
-    response: dict  # full current answers snapshot — backend overwrites on each ping
+    response: Optional[dict] = None  # optional full snapshot (sent periodically)
+    response_delta: Optional[list[dict]] = None  # changed answers since last ping
     events: Optional[list[dict]] = None
     warning_count: Optional[int] = None
 

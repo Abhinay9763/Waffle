@@ -38,6 +38,40 @@ def _extract_policy_events(payload: list[dict] | None) -> list[str]:
     return events
 
 
+def _merge_response_delta(base_response: dict, delta: list[dict] | None) -> dict:
+    merged = {
+        "student_roll": base_response.get("student_roll", ""),
+        "responses": list(base_response.get("responses", [])),
+    }
+    if not delta:
+        return merged
+
+    idx_by_qid: dict[int, int] = {}
+    for i, item in enumerate(merged["responses"]):
+        qid = item.get("question_id")
+        if isinstance(qid, int):
+            idx_by_qid[qid] = i
+
+    for d in delta[:200]:
+        if not isinstance(d, dict):
+            continue
+        qid = d.get("question_id")
+        if not isinstance(qid, int):
+            continue
+        record = {
+            "question_id": qid,
+            "option": d.get("option"),
+            "marked": bool(d.get("marked", False)),
+        }
+        if qid in idx_by_qid:
+            merged["responses"][idx_by_qid[qid]] = record
+        else:
+            idx_by_qid[qid] = len(merged["responses"])
+            merged["responses"].append(record)
+
+    return merged
+
+
 def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
     q_map: dict = {}
     for section in questions_data.get("sections", []):
@@ -67,7 +101,7 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
 
     # Detect first-ever join for this student+exam and read current status.
     existing = await db.client.table("Responses") \
-        .select("id,status") \
+        .select("id,status,response") \
         .eq("exam_id", hb.exam_id) \
         .eq("user_id", user["id"]) \
         .execute()
@@ -80,10 +114,26 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
             "event":   "joined",
         }).execute()
 
+    base_response = existing_row.get("response") if existing_row else {"student_roll": "", "responses": []}
+    next_response = None
+    if hb.response is not None:
+        next_response = hb.response
+    elif hb.response_delta:
+        next_response = _merge_response_delta(base_response or {"student_roll": "", "responses": []}, hb.response_delta)
+
     # Never downgrade submitted -> in_progress due to late heartbeat race.
     if existing_row and existing_row.get("status") == "submitted":
         await db.client.table("Responses") \
             .update({"last_seen_at": now}) \
+            .eq("exam_id", hb.exam_id) \
+            .eq("user_id", user["id"]) \
+            .execute()
+    elif existing_row:
+        payload = {"last_seen_at": now, "status": "in_progress"}
+        if next_response is not None:
+            payload["response"] = next_response
+        await db.client.table("Responses") \
+            .update(payload) \
             .eq("exam_id", hb.exam_id) \
             .eq("user_id", user["id"]) \
             .execute()
@@ -92,7 +142,7 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
             {
                 "exam_id":      hb.exam_id,
                 "user_id":      user["id"],
-                "response":     hb.response,
+                "response":     next_response or {"student_roll": "", "responses": []},
                 "status":       "in_progress",
                 "last_seen_at": now,
             },

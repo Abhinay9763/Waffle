@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from postgrest.exceptions import APIError
 from starlette.status import HTTP_201_CREATED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST
 
@@ -297,7 +297,11 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
 
 
 @router.get("/exam/{exam_id}/logs")
-async def getExamLogs(exam_id: int, user=Depends(get_current_user)):
+async def getExamLogs(
+    exam_id: int,
+    since: str | None = Query(default=None, description="Return logs newer than this ISO timestamp."),
+    user=Depends(get_current_user),
+):
     """Recent event log for a live exam — faculty only."""
     exam_res = await db.client.table("Exams") \
         .select("id") \
@@ -307,12 +311,14 @@ async def getExamLogs(exam_id: int, user=Depends(get_current_user)):
     if not exam_res.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
-    logs = await db.client.table("ExamLogs") \
+    query = db.client.table("ExamLogs") \
         .select("event,created_at,Users(name,roll)") \
-        .eq("exam_id", exam_id) \
-        .order("created_at", desc=True) \
-        .limit(100) \
-        .execute()
+        .eq("exam_id", exam_id)
+    if since:
+        query = query.gt("created_at", since)
+        logs = await query.order("created_at", desc=False).limit(200).execute()
+    else:
+        logs = await query.order("created_at", desc=True).limit(100).execute()
     return {"logs": logs.data}
 
 
