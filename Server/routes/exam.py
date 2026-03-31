@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
+from postgrest.exceptions import APIError
 from starlette.status import HTTP_201_CREATED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST
 
 from deps import get_current_user
@@ -8,6 +9,17 @@ from models import Exam, RetakeRequest
 from supa import db
 
 router = APIRouter()
+
+
+def _is_missing_column_error(err: Exception, column_name: str) -> bool:
+    if not isinstance(err, APIError):
+        return False
+    payload = getattr(err, "args", [{}])[0]
+    if not isinstance(payload, dict):
+        return False
+    msg = str(payload.get("message", ""))
+    code = str(payload.get("code", ""))
+    return code == "42703" and column_name in msg
 
 
 def compute_score(response: dict, answers: dict, questions_data: dict) -> int:
@@ -39,7 +51,14 @@ async def createExam(exam: Exam, user=Depends(get_current_user)):
     data["creator_id"] = user["id"]
     data["start"] = data["start"].isoformat()
     data["end"] = data["end"].isoformat()
-    response = await db.client.table("Exams").insert(data).execute()
+    try:
+        response = await db.client.table("Exams").insert(data).execute()
+    except APIError as err:
+        if _is_missing_column_error(err, "max_warnings"):
+            legacy_data = {k: v for k, v in data.items() if k != "max_warnings"}
+            response = await db.client.table("Exams").insert(legacy_data).execute()
+        else:
+            raise
     return {"msg": "Exam created", "id": response.data[0]["id"]}
 
 
@@ -82,10 +101,19 @@ async def availableExams(user=Depends(get_current_user)):
 @router.get("/exam/{exam_id}/take")
 async def takeExam(exam_id: int, user=Depends(get_current_user)):
     """Return full exam + paper data for a student to take."""
-    exam_res = await db.client.table("Exams") \
-        .select("name,total_marks,start,end,questionpaper_id,join_window") \
-        .eq("id", exam_id) \
-        .execute()
+    try:
+        exam_res = await db.client.table("Exams") \
+            .select("name,total_marks,start,end,questionpaper_id,join_window,max_warnings") \
+            .eq("id", exam_id) \
+            .execute()
+    except APIError as err:
+        if _is_missing_column_error(err, "max_warnings"):
+            exam_res = await db.client.table("Exams") \
+                .select("name,total_marks,start,end,questionpaper_id,join_window") \
+                .eq("id", exam_id) \
+                .execute()
+        else:
+            raise
     if not exam_res.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
     exam = exam_res.data[0]
@@ -125,6 +153,7 @@ async def takeExam(exam_id: int, user=Depends(get_current_user)):
             "start_time": exam["start"],
             "end_time": exam["end"],
             "total_marks": exam["total_marks"],
+            "max_warnings": exam.get("max_warnings") or 3,
         },
         "sections": paper_res.data[0]["questions"].get("sections", []),
     }

@@ -1,6 +1,16 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import StudentSidebar from "@/components/layout/StudentSidebar";
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isExamRoute = pathname.startsWith("/exam/");
+
+  if (isExamRoute) {
+    return <div className="h-screen overflow-hidden bg-zinc-950">{children}</div>;
+  }
+
   return (
     <div className="flex h-screen bg-zinc-950 overflow-hidden">
       <StudentSidebar />

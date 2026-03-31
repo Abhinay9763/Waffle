@@ -9,6 +9,34 @@ from supa import db
 
 router = APIRouter()
 
+ALLOWED_POLICY_EVENTS = {
+    "focus_lost",
+    "tab_hidden",
+    "fullscreen_exit",
+    "copy_attempt",
+    "paste_attempt",
+    "screenshot_suspected",
+    "warning_issued",
+    "lock_started",
+    "lock_ended",
+    "auto_submitted_policy",
+    "blind_mode_enabled",
+    "blind_mode_disabled",
+}
+
+
+def _extract_policy_events(payload: list[dict] | None) -> list[str]:
+    if not payload:
+        return []
+    events: list[str] = []
+    for item in payload[:30]:
+        if not isinstance(item, dict):
+            continue
+        ev = item.get("event")
+        if isinstance(ev, str) and ev in ALLOWED_POLICY_EVENTS:
+            events.append(ev)
+    return events
+
 
 def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
     q_map: dict = {}
@@ -37,12 +65,14 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
     """PyQt client calls this every X seconds to autosave and signal presence."""
     now = datetime.now(timezone.utc).isoformat()
 
-    # Detect first-ever join for this student+exam
+    # Detect first-ever join for this student+exam and read current status.
     existing = await db.client.table("Responses") \
-        .select("id") \
+        .select("id,status") \
         .eq("exam_id", hb.exam_id) \
         .eq("user_id", user["id"]) \
         .execute()
+
+    existing_row = existing.data[0] if existing.data else None
     if not existing.data:
         await db.client.table("ExamLogs").insert({
             "exam_id": hb.exam_id,
@@ -50,16 +80,36 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
             "event":   "joined",
         }).execute()
 
-    await db.client.table("Responses").upsert(
-        {
-            "exam_id":      hb.exam_id,
-            "user_id":      user["id"],
-            "response":     hb.response,
-            "status":       "in_progress",
-            "last_seen_at": now,
-        },
-        on_conflict="exam_id,user_id",
-    ).execute()
+    # Never downgrade submitted -> in_progress due to late heartbeat race.
+    if existing_row and existing_row.get("status") == "submitted":
+        await db.client.table("Responses") \
+            .update({"last_seen_at": now}) \
+            .eq("exam_id", hb.exam_id) \
+            .eq("user_id", user["id"]) \
+            .execute()
+    else:
+        await db.client.table("Responses").upsert(
+            {
+                "exam_id":      hb.exam_id,
+                "user_id":      user["id"],
+                "response":     hb.response,
+                "status":       "in_progress",
+                "last_seen_at": now,
+            },
+            on_conflict="exam_id,user_id",
+        ).execute()
+
+    policy_events = _extract_policy_events(hb.events)
+    if policy_events:
+        await db.client.table("ExamLogs").insert([
+            {
+                "exam_id": hb.exam_id,
+                "user_id": user["id"],
+                "event": ev,
+            }
+            for ev in policy_events
+        ]).execute()
+
     return {"msg": "ok"}
 
 

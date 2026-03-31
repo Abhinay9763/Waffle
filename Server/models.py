@@ -43,6 +43,7 @@ class Exam(BaseModel):
     creator_id : int
     questionpaper_id : int
     join_window : Optional[int] = None  # minutes after start; None = no limit
+    max_warnings : Optional[int] = 3
 
 class Response(BaseModel):
     id : Optional[int] = None
@@ -54,6 +55,8 @@ class Response(BaseModel):
 class Heartbeat(BaseModel):
     exam_id: int
     response: dict  # full current answers snapshot — backend overwrites on each ping
+    events: Optional[list[dict]] = None
+    warning_count: Optional[int] = None
 
 class Submit(BaseModel):
     exam_id: int

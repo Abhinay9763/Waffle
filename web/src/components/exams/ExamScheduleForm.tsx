@@ -22,6 +22,7 @@ const schema = z
     start: z.string().min(1, "Start time is required"),
     end: z.string().min(1, "End time is required"),
     duration_minutes: z.coerce.number().min(1, "Duration must be at least 1 minute"),
+    max_warnings: z.coerce.number().int().min(1, "Must be at least 1 warning").max(20, "Keep this at 20 or less"),
     join_window: z.preprocess(
       (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
       z.number().int().min(1, "Must be at least 1 minute").optional(),
@@ -114,6 +115,7 @@ export default function ExamScheduleForm() {
     resolver: zodResolver(schema),
     defaultValues: {
       duration_minutes: 120, // Default to 2 hours
+      max_warnings: 3,
     }
   });
 
@@ -162,6 +164,7 @@ export default function ExamScheduleForm() {
           start: new Date(data.start).toISOString(),
           end: new Date(data.end).toISOString(),
           creator_id: 0,
+          max_warnings: data.max_warnings,
           join_window: data.join_window ?? null,
         }),
       });
@@ -359,6 +362,24 @@ export default function ExamScheduleForm() {
             </div>
             <p className="text-xs text-zinc-600">Students cannot join after this many minutes. Leave blank for no limit.</p>
             <FieldError message={errors.join_window?.message} />
+          </div>
+
+          {/* Max warnings */}
+          <div className="space-y-1.5">
+            <Label htmlFor="max_warnings">Max warnings</Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="max_warnings"
+                type="number"
+                min={1}
+                max={20}
+                {...register("max_warnings")}
+                className={`w-32 rounded-lg border bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:ring-2 focus:ring-yellow-500/70 focus:border-yellow-500 ${errors.max_warnings ? inputError : inputNormal}`}
+              />
+              <span className="text-sm text-zinc-500">violations before auto-submit</span>
+            </div>
+            <p className="text-xs text-zinc-600">Recommended: 3. Student is temporarily locked after each violation and auto-submitted at this limit.</p>
+            <FieldError message={errors.max_warnings?.message} />
           </div>
 
           {/* Submit */}

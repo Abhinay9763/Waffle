@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
+import Link from "next/link";
 import { CalendarDays, Loader2, Radio } from "lucide-react";
 import { API } from "@/lib/config";
 
@@ -98,7 +99,16 @@ export default function StudentDashboard() {
                   <span className="text-zinc-600">·</span>
                   <span>{e.total_marks} marks</span>
                 </div>
-                <p className="text-xs text-zinc-600 pt-0.5">Open the desktop app to participate.</p>
+                <div className="pt-2">
+                  <Link
+                    href={`/exam/${e.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center rounded-lg bg-yellow-400 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-yellow-300 transition-colors"
+                  >
+                    Start exam
+                  </Link>
+                </div>
               </div>
             ))}
           </section>
