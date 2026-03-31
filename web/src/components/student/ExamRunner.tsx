@@ -21,6 +21,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showLeavePrompt, setShowLeavePrompt] = useState(false);
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [warningCount, setWarningCount] = useState(0);
@@ -482,8 +483,12 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
   const onBackClick = () => {
     if (submitting) return;
-    const yes = window.confirm("Leave exam and submit current answers? You cannot continue this attempt afterward.");
-    if (!yes) return;
+    setShowLeavePrompt(true);
+  };
+
+  const confirmLeaveAndSubmit = () => {
+    if (submitting) return;
+    setShowLeavePrompt(false);
     void submitExam("manual");
   };
 
@@ -512,6 +517,32 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100">
+      {showLeavePrompt && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-zinc-950/85 px-6 text-center">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <h2 className="text-lg font-semibold text-zinc-100">Leave exam?</h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              Your current answers will be submitted and this attempt cannot be resumed.
+            </p>
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowLeavePrompt(false)}
+                className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-300 hover:border-zinc-500"
+              >
+                Continue exam
+              </button>
+              <button
+                type="button"
+                onClick={confirmLeaveAndSubmit}
+                className="rounded-lg bg-yellow-400 px-3 py-2 text-xs font-semibold text-zinc-900 hover:bg-yellow-300"
+              >
+                Submit and leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {!isFullscreen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/95 px-6 text-center">
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
