@@ -325,6 +325,97 @@ async def getExamLogs(
     return {"logs": logs.data}
 
 
+@router.get("/exam/{exam_id}/snapshot")
+async def getExamSnapshot(
+    exam_id: int,
+    since: str | None = Query(default=None, description="Return logs newer than this ISO timestamp."),
+    user=Depends(get_current_user),
+):
+    """Combined faculty snapshot: live state + logs in one request."""
+    exam_res = await db.client.table("Exams") \
+        .select("id,name,total_marks,start,end,questionpaper_id") \
+        .eq("id", exam_id) \
+        .eq("creator_id", user["id"]) \
+        .execute()
+    if not exam_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+    exam = exam_res.data[0]
+
+    paper_res = await db.client.table("QuestionPapers") \
+        .select("questions") \
+        .eq("id", exam["questionpaper_id"]) \
+        .execute()
+    total_questions = 0
+    if paper_res.data:
+        qs = paper_res.data[0]["questions"]
+        for section in qs.get("sections", []):
+            total_questions += len(section.get("questions", []))
+
+    resp_res = await db.client.table("Responses") \
+        .select("last_seen_at,response,Users(name,roll)") \
+        .eq("exam_id", exam_id) \
+        .eq("status", "in_progress") \
+        .execute()
+
+    now = datetime.now(timezone.utc)
+    active_threshold = timedelta(seconds=60)
+    active, idle = [], []
+    for r in resp_res.data:
+        answered = sum(
+            1 for q in r["response"].get("responses", [])
+            if q.get("option") is not None
+        )
+        entry = {
+            "student_name": r["Users"]["name"],
+            "student_roll": r["Users"]["roll"],
+            "last_seen_at": r["last_seen_at"],
+            "answered": answered,
+            "total": total_questions,
+        }
+        last_seen = datetime.fromisoformat(r["last_seen_at"].replace("Z", "+00:00"))
+        if now - last_seen <= active_threshold:
+            active.append(entry)
+        else:
+            idle.append(entry)
+
+    submitted_res = await db.client.table("Responses") \
+        .select("user_id,submitted_at,Users(name,roll)") \
+        .eq("exam_id", exam_id) \
+        .eq("status", "submitted") \
+        .order("submitted_at") \
+        .execute()
+    submitted = [
+        {
+            "student_name": r["Users"]["name"],
+            "student_roll": r["Users"]["roll"],
+            "submitted_at": r["submitted_at"],
+            "user_id":      r["user_id"],
+        }
+        for r in submitted_res.data
+    ]
+
+    log_query = db.client.table("ExamLogs") \
+        .select("event,created_at,Users(name,roll)") \
+        .eq("exam_id", exam_id)
+    if since:
+        log_query = log_query.gt("created_at", since)
+        logs_res = await log_query.order("created_at", desc=False).limit(200).execute()
+    else:
+        logs_res = await log_query.order("created_at", desc=True).limit(100).execute()
+
+    logs = logs_res.data or []
+    last_log_at = logs[-1]["created_at"] if logs and since else (logs[0]["created_at"] if logs else None)
+
+    return {
+        "exam": exam,
+        "active": active,
+        "idle": idle,
+        "submitted": submitted,
+        "logs": logs,
+        "last_log_at": last_log_at,
+    }
+
+
 @router.post("/exam/{exam_id}/retake")
 async def grantRetake(exam_id: int, body: RetakeRequest, user=Depends(get_current_user)):
     """Faculty: revert a submitted response back to in_progress so student can retake."""

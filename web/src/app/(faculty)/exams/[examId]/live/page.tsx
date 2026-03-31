@@ -136,22 +136,22 @@ export default function LiveControlCentre() {
     const t = token.current;
     try {
       const since = !isInit ? lastLogAtRef.current : null;
-      const logsUrl = since
-        ? `${API}/exam/${examId}/logs?since=${encodeURIComponent(since)}`
-        : `${API}/exam/${examId}/logs`;
+      const snapshotUrl = since
+        ? `${API}/exam/${examId}/snapshot?since=${encodeURIComponent(since)}`
+        : `${API}/exam/${examId}/snapshot`;
 
-      const [liveRes, logRes] = await Promise.all([
-        fetch(`${API}/exam/${examId}/live`,  { headers: { "x-session-token": t } }),
-        fetch(logsUrl,  { headers: { "x-session-token": t } }),
-      ]);
-      if (!liveRes.ok) { setError("Could not load exam data."); return; }
-      const live = await liveRes.json();
-      const logData = logRes.ok ? await logRes.json() : { logs: [] };
-      setExam(live.exam);
-      setActive(live.active ?? []);
-      setIdle(live.idle ?? []);
-      setSubmitted(live.submitted ?? []);
-      mergeLogs(logData.logs ?? [], !isInit && !!since);
+      const res = await fetch(snapshotUrl, { headers: { "x-session-token": t } });
+      if (!res.ok) { setError("Could not load exam data."); return; }
+      const snap = await res.json();
+
+      setExam(snap.exam);
+      setActive(snap.active ?? []);
+      setIdle(snap.idle ?? []);
+      setSubmitted(snap.submitted ?? []);
+      mergeLogs(snap.logs ?? [], !isInit && !!since);
+      if (snap.last_log_at) {
+        lastLogAtRef.current = snap.last_log_at;
+      }
       setError(null);
     } catch {
       setError("Could not reach the server.");
