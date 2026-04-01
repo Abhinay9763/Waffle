@@ -268,11 +268,12 @@ async def takeExam(exam_id: int, user=Depends(get_current_user)):
 
 @router.get("/exam/list")
 async def listExams(user=Depends(get_current_user)):
-    response = await db.client.table("Exams") \
-        .select("id,name,total_marks,start,end,created_at") \
-        .eq("creator_id", user["id"]) \
-        .order("created_at", desc=True) \
-        .execute()
+    query = db.client.table("Exams") \
+        .select("id,name,total_marks,start,end,created_at,creator_id") \
+        .order("created_at", desc=True)
+    if user.get("role") != "HOD":
+        query = query.eq("creator_id", user["id"])
+    response = await query.execute()
     return {"exams": response.data}
 
 
@@ -280,7 +281,7 @@ async def listExams(user=Depends(get_current_user)):
 async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
     # 1. Verify exam ownership
     exam = await _get_exam_core(exam_id)
-    if not exam or exam.get("creator_id") != user["id"]:
+    if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     # 2. Fetch question paper for scoring
@@ -325,7 +326,7 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
     """Faculty live-tracker: in-progress students split into active / idle."""
     # 1. Verify exam ownership
     exam = await _get_exam_core(exam_id)
-    if not exam or exam.get("creator_id") != user["id"]:
+    if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     paper = await _get_paper_questions(exam["questionpaper_id"])
@@ -353,7 +354,7 @@ async def getExamLogs(
 ):
     """Recent event log for a live exam — faculty only."""
     exam = await _get_exam_core(exam_id)
-    if not exam or exam.get("creator_id") != user["id"]:
+    if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     query = db.client.table("ExamLogs") \
@@ -378,7 +379,7 @@ async def getExamSnapshot(
 ):
     """Combined faculty snapshot: live state + logs in one request."""
     exam = await _get_exam_core(exam_id)
-    if not exam or exam.get("creator_id") != user["id"]:
+    if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     paper = await _get_paper_questions(exam["questionpaper_id"])

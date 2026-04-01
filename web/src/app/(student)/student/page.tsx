@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
-import { CalendarDays, Loader2, Radio } from "lucide-react";
+import { CalendarDays, Loader2, Radio, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { API } from "@/lib/config";
 
@@ -41,7 +41,39 @@ function timeUntil(iso: string) {
 export default function StudentDashboard() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [startingExamId, setStartingExamId] = useState<number | null>(null);
+
+  const loadExams = async (silent = false) => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) {
+      setExams([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    if (silent) setRefreshing(true);
+    else setLoading(true);
+
+    const res = await fetch(`${API}/exam/available`, {
+      cache: "no-store",
+      headers: { "x-session-token": token },
+    }).catch(() => null);
+
+    if (!res?.ok) {
+      if (!silent) setExams([]);
+      if (!silent) toast.error("Could not refresh exams right now.");
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    const data = await res.json().catch(() => ({ exams: [] }));
+    setExams(data.exams ?? []);
+    setLoading(false);
+    setRefreshing(false);
+  };
 
   const handleStartExam = async (examId: number) => {
     const token = getCookie("wfl-session") as string | undefined;
@@ -75,14 +107,14 @@ export default function StudentDashboard() {
   };
 
   useEffect(() => {
-    const token = getCookie("wfl-session") as string | undefined;
-    if (!token) { setLoading(false); return; }
+    void loadExams(false);
 
-    fetch(`${API}/exam/available`, { headers: { "x-session-token": token } })
-      .then((r) => (r.ok ? r.json() : { exams: [] }))
-      .then((d) => setExams(d.exams ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    // Keep dashboard list fresh so newly scheduled exams appear automatically.
+    const intervalId = window.setInterval(() => {
+      void loadExams(true);
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
   }, []);
 
   if (loading) {
@@ -109,7 +141,20 @@ export default function StudentDashboard() {
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
 
-        <h1 className="text-xl font-semibold text-zinc-100">Dashboard</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-zinc-100">Dashboard</h1>
+          <button
+            type="button"
+            onClick={() => {
+              void loadExams(true);
+            }}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Refreshing..." : "Reload"}
+          </button>
+        </div>
 
         {live.length > 0 && (
           <section className="space-y-2.5">

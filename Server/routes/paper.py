@@ -259,10 +259,10 @@ async def downloadTemplate(template_name: str, user=Depends(get_current_user)):
 
 @router.get("/paper/list")
 async def listPapers(user=Depends(get_current_user)):
-    response = await db.client.table("QuestionPapers") \
-        .select("id,questions") \
-        .eq("creator_id", user["id"]) \
-        .execute()
+    query = db.client.table("QuestionPapers").select("id,questions")
+    if user.get("role") != "HOD":
+        query = query.eq("creator_id", user["id"])
+    response = await query.execute()
 
     paper_ids = [p["id"] for p in response.data]
     in_use_ids: set[int] = set()
@@ -294,11 +294,12 @@ async def listPapers(user=Depends(get_current_user)):
 
 @router.get("/paper/{paper_id:int}")
 async def getPaper(paper_id: int, user=Depends(get_current_user)):
-    paper_res = await db.client.table("QuestionPapers") \
+    query = db.client.table("QuestionPapers") \
         .select("*") \
-        .eq("id", paper_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
+        .eq("id", paper_id)
+    if user.get("role") != "HOD":
+        query = query.eq("creator_id", user["id"])
+    paper_res = await query.execute()
 
     if not paper_res.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
@@ -416,11 +417,12 @@ async def uploadImage(file: UploadFile = File(...), user=Depends(get_current_use
 async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
     """Generate and download a Word document for the question paper with embedded images."""
     # Get the paper
-    paper_res = await db.client.table("QuestionPapers") \
+    query = db.client.table("QuestionPapers") \
         .select("*") \
-        .eq("id", paper_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
+        .eq("id", paper_id)
+    if user.get("role") != "HOD":
+        query = query.eq("creator_id", user["id"])
+    paper_res = await query.execute()
 
     if not paper_res.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
