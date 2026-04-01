@@ -150,6 +150,20 @@ async def getPendingFaculty(user=Depends(get_current_user)):
     return {"pending_faculty": response.data}
 
 
+@router.get("/hod/faculty")
+async def listApprovedFaculty(user=Depends(get_current_user)):
+    if user["role"] != "HOD":
+        raise HTTPException(status_code=403, detail="Only HOD can access this resource")
+
+    response = await db.client.table("Users") \
+        .select("id,name,email,roll,role,created_at,approval_status") \
+        .eq("role", "Faculty") \
+        .eq("approval_status", "approved") \
+        .order("created_at", desc=True) \
+        .execute()
+    return {"faculty": response.data}
+
+
 @router.post("/hod/approve-faculty/{user_id}")
 async def approveFaculty(user_id: int, user=Depends(get_current_user)):
     if user["role"] != "HOD":

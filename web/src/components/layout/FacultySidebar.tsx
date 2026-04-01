@@ -9,7 +9,6 @@ import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
 
 const NAV = [
-  { label: "Dashboard",        href: "/faculty",   icon: LayoutDashboard },
   { label: "Question Papers",  href: "/papers",    icon: FileText },
   { label: "Exams",            href: "/exams",     icon: CalendarDays },
   { label: "Results",          href: "/responses", icon: BarChart2 },
@@ -18,7 +17,7 @@ const NAV = [
 export default function FacultySidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<{ name: string; roll: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; roll: string; role?: string } | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
 
   useEffect(() => {
@@ -47,8 +46,8 @@ export default function FacultySidebar() {
 
         const sessionData = await response.json();
 
-        // Verify this is actually a Faculty user with approved status
-        if (sessionData.user?.role !== "Faculty") {
+        // Shared pages are available to Faculty and HOD.
+        if (sessionData.user?.role !== "Faculty" && sessionData.user?.role !== "HOD") {
           deleteCookie("wfl-session");
           deleteCookie("wfl-user");
           router.replace("/login");
@@ -90,20 +89,31 @@ export default function FacultySidebar() {
   return (
     <aside className="flex flex-col w-56 h-screen bg-zinc-900 border-r border-zinc-800 shrink-0">
 
+      {(() => {
+        const dashboardHref = user?.role === "HOD" ? "/hod" : "/faculty";
+        const roleLabel = user?.role === "HOD" ? "HOD" : "FACULTY";
+        const roleClass = user?.role === "HOD"
+          ? "text-yellow-400 border-yellow-800/50 bg-yellow-950/30"
+          : "text-purple-400 border-purple-800/50 bg-purple-950/30";
+        const nav = [{ label: "Dashboard", href: dashboardHref, icon: LayoutDashboard }, ...NAV];
+
+        return (
+          <>
+
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 h-20 border-b border-zinc-800 shrink-0">
         <span className="text-yellow-400">
           <WaffleLogo size={72} />
         </span>
         <span className="text-lg font-semibold text-zinc-100 tracking-tight">{APP_NAME}</span>
-        <span className="ml-auto text-[10px] font-medium text-purple-400 border border-purple-800/50 bg-purple-950/30 rounded px-1.5 py-0.5">
-          FACULTY
+        <span className={`ml-auto text-[10px] font-medium border rounded px-1.5 py-0.5 ${roleClass}`}>
+          {roleLabel}
         </span>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ label, href, icon: Icon }) => {
+        {nav.map(({ label, href, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
 
           return (
@@ -128,7 +138,7 @@ export default function FacultySidebar() {
       {/* User footer */}
       <div className="px-3 py-3 border-t border-zinc-800 space-y-0.5 shrink-0">
         <div className="px-3 py-2 rounded-lg">
-          <p className="text-xs font-medium text-zinc-300 truncate">{user?.name ?? "Faculty"}</p>
+          <p className="text-xs font-medium text-zinc-300 truncate">{user?.name ?? "User"}</p>
           <p className="text-[11px] text-zinc-600 truncate">{user?.roll ?? ""}</p>
         </div>
         <button
@@ -139,6 +149,10 @@ export default function FacultySidebar() {
           Sign out
         </button>
       </div>
+
+          </>
+        );
+      })()}
 
     </aside>
   );

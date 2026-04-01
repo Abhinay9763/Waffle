@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, FileText, CalendarDays, BarChart2, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, UserCheck, Activity, FileText, CalendarDays, BarChart2, LogOut, Loader2 } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
@@ -11,6 +11,8 @@ import { API, APP_NAME } from "@/lib/config";
 const NAV = [
   { label: "Dashboard",        href: "/hod",       icon: LayoutDashboard },
   { label: "Faculty Approvals", href: "/approvals", icon: Users },
+  { label: "Faculty Management", href: "/hod/faculty", icon: UserCheck },
+  { label: "System Oversight", href: "/hod/oversight", icon: Activity },
   { label: "Question Papers",  href: "/papers",        icon: FileText },
   { label: "Exams",            href: "/exams",         icon: CalendarDays },
   { label: "Results",          href: "/responses",     icon: BarChart2 },
@@ -104,7 +106,7 @@ export default function HODSidebar() {
       <nav className="flex-1 overflow-y-auto py-6">
         <ul className="px-4 space-y-1">
           {NAV.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <li key={item.href}>
                 <Link

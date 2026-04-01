@@ -68,19 +68,25 @@ export default function HODDashboard() {
           </Link>
 
           {/* Quick Actions */}
-          <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/50">
+          <Link
+            href="/hod/faculty"
+            className="block p-6 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
+          >
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-lg bg-green-950/40 border border-green-900/40">
                 <UserCheck className="w-6 h-6 text-green-400" />
               </div>
               <div>
                 <div className="text-sm font-medium text-zinc-200">Faculty Management</div>
-                <div className="text-xs text-zinc-500 mt-1">Approve or reject new faculty</div>
+                <div className="text-xs text-zinc-500 mt-1">View all approved faculty members</div>
               </div>
             </div>
-          </div>
+          </Link>
 
-          <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/50">
+          <Link
+            href="/hod/oversight"
+            className="block p-6 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
+          >
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-lg bg-blue-950/40 border border-blue-900/40">
                 <UserX className="w-6 h-6 text-blue-400" />
@@ -90,7 +96,7 @@ export default function HODDashboard() {
                 <div className="text-xs text-zinc-500 mt-1">Monitor exams and results</div>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
 
         {/* Quick Actions */}
