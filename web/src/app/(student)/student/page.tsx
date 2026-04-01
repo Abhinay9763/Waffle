@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
-import Link from "next/link";
 import { CalendarDays, Loader2, Radio } from "lucide-react";
 import { API } from "@/lib/config";
 
@@ -41,6 +40,38 @@ function timeUntil(iso: string) {
 export default function StudentDashboard() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startingExamId, setStartingExamId] = useState<number | null>(null);
+
+  const handleStartExam = async (examId: number) => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) {
+      alert("Session expired. Please login again.");
+      return;
+    }
+
+    setStartingExamId(examId);
+    try {
+      const res = await fetch(`${API}/exam/${examId}/take`, {
+        cache: "no-store",
+        headers: { "x-session-token": token },
+      }).catch(() => null);
+
+      if (!res) {
+        alert("Could not reach server. Please try again.");
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body?.detail ?? "You cannot enter this exam now.");
+        return;
+      }
+
+      window.open(`/exam/${examId}`, "_blank", "noopener,noreferrer");
+    } finally {
+      setStartingExamId(null);
+    }
+  };
 
   useEffect(() => {
     const token = getCookie("wfl-session") as string | undefined;
@@ -100,14 +131,16 @@ export default function StudentDashboard() {
                   <span>{e.total_marks} marks</span>
                 </div>
                 <div className="pt-2">
-                  <Link
-                    href={`/exam/${e.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleStartExam(e.id);
+                    }}
+                    disabled={startingExamId === e.id}
                     className="inline-flex items-center rounded-lg bg-yellow-400 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-yellow-300 transition-colors"
                   >
-                    Start exam
-                  </Link>
+                    {startingExamId === e.id ? "Checking..." : "Start exam"}
+                  </button>
                 </div>
               </div>
             ))}

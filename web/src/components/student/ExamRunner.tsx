@@ -125,6 +125,37 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     submittingRef.current = submitting;
   }, [submitting]);
 
+  const verifyCanTakeExam = useCallback(async () => {
+    if (!token) return;
+
+    const res = await fetch(`${API}/exam/${exam.meta.exam_id}/take`, {
+      cache: "no-store",
+      headers: { "x-session-token": token },
+    }).catch(() => null);
+
+    if (!res) return;
+    if (res.ok) return;
+
+    if (res.status === 403 || res.status === 404) {
+      const body = await res.json().catch(() => ({}));
+      alert(body?.detail ?? "You can no longer continue this exam.");
+      router.replace("/history");
+    }
+  }, [token, exam.meta.exam_id, router]);
+
+  useEffect(() => {
+    void verifyCanTakeExam();
+
+    const onPageShow = () => {
+      void verifyCanTakeExam();
+    };
+
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [verifyCanTakeExam]);
+
   const buildSubmission = useCallback(() => {
     return {
       student_roll: studentRoll,

@@ -95,6 +95,9 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const [blindModeEnabled, setBlindModeEnabled] = useState(false);
   const [blindModeState, setBlindModeState] = useState<BlindModeState>("idle");
   const [showListeningBadge, setShowListeningBadge] = useState(false);
+  const [preferredVoice, setPreferredVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([
     {
       id: "init",
@@ -139,6 +142,11 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     [responses],
   );
 
+  const selectedVoice = useMemo(() => {
+    if (!selectedVoiceURI) return preferredVoice;
+    return availableVoices.find((v) => v.voiceURI === selectedVoiceURI) ?? preferredVoice;
+  }, [availableVoices, selectedVoiceURI, preferredVoice]);
+
   const token = (getCookie("wfl-session") as string | undefined) ?? "";
   const studentRoll = useMemo(() => {
     const raw = getCookie("wfl-user") as string | undefined;
@@ -158,6 +166,43 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   useEffect(() => {
     blindModeStateRef.current = blindModeState;
   }, [blindModeState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const pickBestVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return;
+      setAvailableVoices(voices);
+
+      const remote = voices.filter((v) => !v.localService);
+      const remoteEnglish = remote.filter((v) => v.lang.toLowerCase().startsWith("en"));
+      const localEnglish = voices.filter((v) => v.localService && v.lang.toLowerCase().startsWith("en"));
+
+      const qualityPattern = /(natural|neural|online|google|aria|jenny|guy|zira|hazel|ravi|heera)/i;
+      const best =
+        remoteEnglish.find((v) => qualityPattern.test(v.name)) ??
+        remoteEnglish[0] ??
+        remote.find((v) => qualityPattern.test(v.name)) ??
+        remote[0] ??
+        localEnglish.find((v) => qualityPattern.test(v.name)) ??
+        localEnglish[0] ??
+        voices[0] ??
+        null;
+
+      setPreferredVoice(best);
+      setSelectedVoiceURI((prev) => {
+        if (prev && voices.some((v) => v.voiceURI === prev)) return prev;
+        return best?.voiceURI ?? voices[0]?.voiceURI ?? null;
+      });
+    };
+
+    pickBestVoice();
+    window.speechSynthesis.addEventListener("voiceschanged", pickBestVoice);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", pickBestVoice);
+    };
+  }, []);
 
   useEffect(() => {
     if (!transcriptRef.current) return;
@@ -224,7 +269,12 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     window.speechSynthesis.cancel();
     setBlindModeState("speaking");
     const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 1.05;
+    utter.rate = 0.98;
+    utter.pitch = 1;
+    utter.lang = selectedVoice?.lang ?? "en-US";
+    if (selectedVoice) {
+      utter.voice = selectedVoice;
+    }
     utter.onend = () => {
       setBlindModeState("idle");
     };
@@ -232,7 +282,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       setBlindModeState("idle");
     };
     window.speechSynthesis.speak(utter);
-  }, [appendTranscript]);
+  }, [appendTranscript, selectedVoice]);
 
   const setAnswer = useCallback((questionId: number, option: number | null) => {
     setResponses((prev) => {
@@ -467,6 +517,37 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   useEffect(() => {
     submittingRef.current = submitting;
   }, [submitting]);
+
+  const verifyCanTakeExam = useCallback(async () => {
+    if (!token) return;
+
+    const res = await fetch(`${API}/exam/${exam.meta.exam_id}/take`, {
+      cache: "no-store",
+      headers: { "x-session-token": token },
+    }).catch(() => null);
+
+    if (!res) return;
+    if (res.ok) return;
+
+    if (res.status === 403 || res.status === 404) {
+      const body = await res.json().catch(() => ({}));
+      alert(body?.detail ?? "You can no longer continue this exam.");
+      router.replace("/history");
+    }
+  }, [token, exam.meta.exam_id, router]);
+
+  useEffect(() => {
+    void verifyCanTakeExam();
+
+    const onPageShow = () => {
+      void verifyCanTakeExam();
+    };
+
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [verifyCanTakeExam]);
 
   const buildSubmission = useCallback(() => {
     return {
@@ -1103,7 +1184,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
               )}
             </div>
 
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="mt-6 grid gap-4 xl:grid-cols-3">
               <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Transcript</p>
@@ -1131,6 +1212,33 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
                       </li>
                     ))}
                   </ul>
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400">Voice selection</p>
+                <div className="space-y-3">
+                  <label className="block text-[11px] text-zinc-500" htmlFor="blind-voice-selector">Available voices</label>
+                  <select
+                    id="blind-voice-selector"
+                    value={selectedVoiceURI ?? ""}
+                    onChange={(e) => setSelectedVoiceURI(e.target.value || null)}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-yellow-500"
+                  >
+                    {availableVoices.map((voice) => (
+                      <option key={voice.voiceURI} value={voice.voiceURI}>
+                        {voice.name} ({voice.lang})
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-300">
+                    <p><span className="text-zinc-500">Type:</span> {selectedVoice?.localService ? "Offline (local)" : "Online (remote)"}</p>
+                    <p><span className="text-zinc-500">Name:</span> {selectedVoice?.name ?? "-"}</p>
+                    <p><span className="text-zinc-500">Language:</span> {selectedVoice?.lang ?? "-"}</p>
+                    <p><span className="text-zinc-500">Default:</span> {selectedVoice?.default ? "Yes" : "No"}</p>
+                    <p className="break-all"><span className="text-zinc-500">URI:</span> {selectedVoice?.voiceURI ?? "-"}</p>
+                  </div>
                 </div>
               </section>
             </div>
