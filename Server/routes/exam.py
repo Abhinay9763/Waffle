@@ -45,6 +45,55 @@ def compute_score(response: dict, answers: dict, questions_data: dict) -> int:
     return max(0, total)
 
 
+def _build_live_buckets(rows: list[dict], total_questions: int) -> tuple[list[dict], list[dict], list[dict]]:
+    now = datetime.now(timezone.utc)
+    active_threshold = timedelta(seconds=60)
+
+    active: list[dict] = []
+    idle: list[dict] = []
+    submitted: list[dict] = []
+
+    for r in rows:
+        status = r.get("status")
+        user_obj = r.get("Users") or {}
+
+        if status == "submitted":
+            submitted.append(
+                {
+                    "student_name": user_obj.get("name", ""),
+                    "student_roll": user_obj.get("roll", ""),
+                    "submitted_at": r.get("submitted_at"),
+                    "user_id":      r.get("user_id"),
+                }
+            )
+            continue
+
+        last_seen_raw = r.get("last_seen_at")
+        if not isinstance(last_seen_raw, str):
+            continue
+
+        answered = sum(
+            1 for q in (r.get("response") or {}).get("responses", [])
+            if q.get("option") is not None
+        )
+        entry = {
+            "student_name": user_obj.get("name", ""),
+            "student_roll": user_obj.get("roll", ""),
+            "last_seen_at": last_seen_raw,
+            "answered": answered,
+            "total": total_questions,
+        }
+
+        last_seen = datetime.fromisoformat(last_seen_raw.replace("Z", "+00:00"))
+        if now - last_seen <= active_threshold:
+            active.append(entry)
+        else:
+            idle.append(entry)
+
+    submitted.sort(key=lambda x: x.get("submitted_at") or "")
+    return active, idle, submitted
+
+
 @router.post("/exam/create", status_code=HTTP_201_CREATED)
 async def createExam(exam: Exam, user=Depends(get_current_user)):
     data = exam.model_dump(exclude={"id", "created_at"})
@@ -249,52 +298,13 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
         for section in qs.get("sections", []):
             total_questions += len(section.get("questions", []))
 
-    # 3. Fetch in-progress responses
     resp_res = await db.client.table("Responses") \
-        .select("last_seen_at,response,Users(name,roll)") \
+        .select("status,last_seen_at,submitted_at,user_id,response,Users(name,roll)") \
         .eq("exam_id", exam_id) \
-        .eq("status", "in_progress") \
+        .in_("status", ["in_progress", "submitted"]) \
         .execute()
 
-    now = datetime.now(timezone.utc)
-    active_threshold = timedelta(seconds=60)
-
-    active, idle = [], []
-    for r in resp_res.data:
-        answered = sum(
-            1 for q in r["response"].get("responses", [])
-            if q.get("option") is not None
-        )
-        entry = {
-            "student_name": r["Users"]["name"],
-            "student_roll": r["Users"]["roll"],
-            "last_seen_at": r["last_seen_at"],
-            "answered": answered,
-            "total": total_questions,
-        }
-        last_seen = datetime.fromisoformat(r["last_seen_at"].replace("Z", "+00:00"))
-        if now - last_seen <= active_threshold:
-            active.append(entry)
-        else:
-            idle.append(entry)
-
-    # 4. Fetch submitted responses
-    submitted_res = await db.client.table("Responses") \
-        .select("user_id,submitted_at,Users(name,roll)") \
-        .eq("exam_id", exam_id) \
-        .eq("status", "submitted") \
-        .order("submitted_at") \
-        .execute()
-
-    submitted = [
-        {
-            "student_name": r["Users"]["name"],
-            "student_roll": r["Users"]["roll"],
-            "submitted_at": r["submitted_at"],
-            "user_id":      r["user_id"],
-        }
-        for r in submitted_res.data
-    ]
+    active, idle, submitted = _build_live_buckets(resp_res.data, total_questions)
 
     return {"exam": exam, "active": active, "idle": idle, "submitted": submitted}
 
@@ -352,47 +362,12 @@ async def getExamSnapshot(
             total_questions += len(section.get("questions", []))
 
     resp_res = await db.client.table("Responses") \
-        .select("last_seen_at,response,Users(name,roll)") \
+        .select("status,last_seen_at,submitted_at,user_id,response,Users(name,roll)") \
         .eq("exam_id", exam_id) \
-        .eq("status", "in_progress") \
+        .in_("status", ["in_progress", "submitted"]) \
         .execute()
 
-    now = datetime.now(timezone.utc)
-    active_threshold = timedelta(seconds=60)
-    active, idle = [], []
-    for r in resp_res.data:
-        answered = sum(
-            1 for q in r["response"].get("responses", [])
-            if q.get("option") is not None
-        )
-        entry = {
-            "student_name": r["Users"]["name"],
-            "student_roll": r["Users"]["roll"],
-            "last_seen_at": r["last_seen_at"],
-            "answered": answered,
-            "total": total_questions,
-        }
-        last_seen = datetime.fromisoformat(r["last_seen_at"].replace("Z", "+00:00"))
-        if now - last_seen <= active_threshold:
-            active.append(entry)
-        else:
-            idle.append(entry)
-
-    submitted_res = await db.client.table("Responses") \
-        .select("user_id,submitted_at,Users(name,roll)") \
-        .eq("exam_id", exam_id) \
-        .eq("status", "submitted") \
-        .order("submitted_at") \
-        .execute()
-    submitted = [
-        {
-            "student_name": r["Users"]["name"],
-            "student_roll": r["Users"]["roll"],
-            "submitted_at": r["submitted_at"],
-            "user_id":      r["user_id"],
-        }
-        for r in submitted_res.data
-    ]
+    active, idle, submitted = _build_live_buckets(resp_res.data, total_questions)
 
     log_query = db.client.table("ExamLogs") \
         .select("event,created_at,Users(name,roll)") \
