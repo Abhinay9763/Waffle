@@ -284,13 +284,6 @@ export default function LoginForm() {
             >
               Create one
             </Link>
-            {" "}or{" "}
-            <Link
-              href="/download"
-              className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
-            >
-              Download Client
-            </Link>
           </p>
 
           </div>{/* end card */}

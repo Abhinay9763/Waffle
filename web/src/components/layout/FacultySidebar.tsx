@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FileText, CalendarDays, BarChart2, Download, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, FileText, CalendarDays, BarChart2, LogOut, Loader2 } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
@@ -13,7 +13,6 @@ const NAV = [
   { label: "Question Papers",  href: "/papers",    icon: FileText },
   { label: "Exams",            href: "/exams",     icon: CalendarDays },
   { label: "Results",          href: "/responses", icon: BarChart2 },
-  { label: "Get Desktop App", href: "/download", icon: Download, external: true },
 ];
 
 export default function FacultySidebar() {
@@ -104,9 +103,8 @@ export default function FacultySidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ label, href, icon: Icon, external }) => {
+        {NAV.map(({ label, href, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
-          const isDownload = external && href === "/download";
 
           return (
             <Link
@@ -116,9 +114,7 @@ export default function FacultySidebar() {
                 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
                 ${active
                   ? "bg-yellow-500/10 text-yellow-300 border border-yellow-700/40"
-                  : isDownload
-                    ? "text-blue-400 hover:text-blue-300 hover:bg-blue-950/30 border border-blue-800/40"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
                 }
               `}
             >

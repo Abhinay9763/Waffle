@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, FileText, CalendarDays, BarChart2, Download, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, FileText, CalendarDays, BarChart2, LogOut, Loader2 } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
@@ -14,7 +14,6 @@ const NAV = [
   { label: "Question Papers",  href: "/papers",        icon: FileText },
   { label: "Exams",            href: "/exams",         icon: CalendarDays },
   { label: "Results",          href: "/responses",     icon: BarChart2 },
-  { label: "Get Desktop App", href: "/download", icon: Download, external: true },
 ];
 
 export default function HODSidebar() {
@@ -106,7 +105,6 @@ export default function HODSidebar() {
         <ul className="px-4 space-y-1">
           {NAV.map((item) => {
             const isActive = pathname === item.href;
-            const isDownload = item.external && item.href === "/download";
             return (
               <li key={item.href}>
                 <Link
@@ -114,9 +112,7 @@ export default function HODSidebar() {
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
                     isActive
                       ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-                      : isDownload
-                        ? "text-blue-400 hover:text-blue-300 hover:bg-blue-950/30 border border-blue-800/40"
-                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
                   }`}
                 >
                   <item.icon className="w-4 h-4 shrink-0" />

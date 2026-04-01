@@ -224,37 +224,39 @@ export default function PapersPage() {
     <div className="flex-1 overflow-y-auto">
       <div className="px-8 py-10 space-y-6">
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div className="space-y-0.5">
             <h1 className="text-xl font-semibold text-zinc-100">Question Papers</h1>
             <p className="text-sm text-zinc-500">{papers.length} paper{papers.length !== 1 ? "s" : ""}</p>
           </div>
-          <Link
-            href="/papers/new"
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-zinc-900 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New paper
-          </Link>
-          <button
-            type="button"
-            onClick={handleDownloadTemplate}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Template
-          </button>
-          <label className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors cursor-pointer">
-            {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-            {importing ? "Importing..." : "Import paper"}
-            <input
-              type="file"
-              accept=".xlsx"
-              className="hidden"
-              disabled={importing}
-              onChange={handleImportInputChange}
-            />
-          </label>
+          <div className="flex items-center justify-end gap-2 flex-wrap">
+            <Link
+              href="/papers/new"
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-zinc-900 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New paper
+            </Link>
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Template
+            </button>
+            <label className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors cursor-pointer">
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              {importing ? "Importing..." : "Import paper"}
+              <input
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                disabled={importing}
+                onChange={handleImportInputChange}
+              />
+            </label>
+          </div>
         </div>
 
         <div className="rounded-xl border border-zinc-800 overflow-hidden">
