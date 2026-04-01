@@ -14,5 +14,6 @@ export default async function RootPage() {
 
   const { user } = await res.json();
   if (user.role === "Student") redirect("/student");
+  if (user.role === "HOD") redirect("/hod");
   redirect("/faculty");
 }

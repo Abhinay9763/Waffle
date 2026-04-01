@@ -48,7 +48,7 @@ export default function HODDashboard() {
 
           {/* Pending Approvals */}
           <Link
-            href="/hod/approvals"
+            href="/approvals"
             className="block p-6 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900 transition-colors group"
           >
             <div className="flex items-center gap-4">
@@ -107,7 +107,7 @@ export default function HODDashboard() {
                 </p>
               </div>
               <Link
-                href="/hod/approvals"
+                href="/approvals"
                 className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-amber-50 text-sm font-medium transition-colors"
               >
                 Review Now

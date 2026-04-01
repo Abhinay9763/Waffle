@@ -9,8 +9,8 @@ import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
 
 const NAV = [
-  { label: "Dashboard",        href: "/hod/hod",       icon: LayoutDashboard },
-  { label: "Faculty Approvals", href: "/hod/approvals", icon: Users },
+  { label: "Dashboard",        href: "/hod",       icon: LayoutDashboard },
+  { label: "Faculty Approvals", href: "/approvals", icon: Users },
   { label: "Question Papers",  href: "/papers",        icon: FileText },
   { label: "Exams",            href: "/exams",         icon: CalendarDays },
   { label: "Results",          href: "/responses",     icon: BarChart2 },

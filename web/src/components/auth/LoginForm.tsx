@@ -91,7 +91,7 @@ export default function LoginForm() {
     if (user.role === "Student") {
       router.replace("/student");
     } else if (user.role === "HOD") {
-      router.replace("/hod/hod");
+      router.replace("/hod");
     } else {
       router.replace("/faculty");
     }
