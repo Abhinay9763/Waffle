@@ -17,6 +17,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 router = APIRouter()
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "template"
+PAPER_DOCX_TEMPLATE = TEMPLATE_DIR / "Template.docx"
 
 
 def _normalize_option(value) -> int | None:
@@ -429,18 +430,43 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
     meta = questions_data.get("meta", {})
     paper_name = meta.get("exam_name") or f"Paper #{paper_id}"
 
-    # Create Word document
-    doc = Document()
+    # Prefer the project template and gracefully fall back to the plain format.
+    if PAPER_DOCX_TEMPLATE.exists() and PAPER_DOCX_TEMPLATE.is_file():
+        doc = Document(str(PAPER_DOCX_TEMPLATE))
+    else:
+        doc = Document()
     qnum = 0
 
-    # Add title
-    title = doc.add_paragraph()
-    title_run = title.add_run(paper_name)
-    title_run.font.size = Pt(16)
-    title_run.font.bold = True
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Insert generated content right after the template heading block when possible.
+    insert_anchor = None
+    for idx, para in enumerate(doc.paragraphs):
+        if "www.smec.ac.in" in (para.text or "").lower():
+            if idx + 1 < len(doc.paragraphs):
+                insert_anchor = doc.paragraphs[idx + 1]
+            break
 
-    doc.add_paragraph()  # spacing
+    def add_doc_paragraph(text: str = "", style: str | None = None):
+        if insert_anchor is not None:
+            return insert_anchor.insert_paragraph_before(text, style=style)
+        return doc.add_paragraph(text, style=style)
+
+    # Preserve template body content and append generated questions after it.
+    title_style = "Title" if "Title" in doc.styles else None
+    section_style = "Heading 1" if "Heading 1" in doc.styles else None
+    question_style = "Heading 2" if "Heading 2" in doc.styles else None
+
+    title = add_doc_paragraph(style=title_style)
+    title_run = title.add_run(paper_name)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title.paragraph_format.space_before = Pt(0)
+    if title_style is None:
+        title_run.font.size = Pt(16)
+        title_run.font.bold = True
+    title_run.underline = False
+
+    spacer = add_doc_paragraph()
+    spacer.paragraph_format.space_before = Pt(0)
+    spacer.paragraph_format.space_after = Pt(0)
 
     # Fetch images in parallel for better performance
     async with httpx.AsyncClient(timeout=10) as client:
@@ -449,18 +475,22 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
         for section in sections:
             # Add section title if multiple sections
             if len(sections) > 1:
-                section_para = doc.add_paragraph()
+                section_para = add_doc_paragraph(style=section_style)
                 section_run = section_para.add_run(section.get("name", "Section"))
-                section_run.font.bold = True
-                section_run.font.size = Pt(13)
+                section_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                section_run.underline = True
+                if section_style is None:
+                    section_run.font.bold = True
+                    section_run.font.size = Pt(13)
 
             for q in section.get("questions", []):
                 qnum += 1
 
                 # Question text
-                q_para = doc.add_paragraph()
+                q_para = add_doc_paragraph(style=question_style)
                 q_run = q_para.add_run(f"Q{qnum}. {q.get('text', '')}")
-                q_run.font.bold = True
+                if question_style is None:
+                    q_run.font.bold = True
 
                 # Question image
                 if q.get("image_url"):
@@ -472,7 +502,11 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
 
                         if q["image_url"] in image_cache:
                             img_bytes = BytesIO(image_cache[q["image_url"]])
-                            doc.add_picture(img_bytes, width=Inches(QUESTION_IMAGE_WIDTH))
+                            if insert_anchor is not None:
+                                img_para = add_doc_paragraph()
+                                img_para.add_run().add_picture(img_bytes, width=Inches(QUESTION_IMAGE_WIDTH))
+                            else:
+                                doc.add_picture(img_bytes, width=Inches(QUESTION_IMAGE_WIDTH))
                     except Exception:
                         pass  # Skip images that fail to download
 
@@ -484,7 +518,7 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
                     opt_image_url = None if isinstance(opt, str) else opt.get("image_url")
 
                     # Option text
-                    opt_para = doc.add_paragraph(f"{letters[i]})  {opt_text}")
+                    opt_para = add_doc_paragraph(f"{letters[i]})  {opt_text}")
                     opt_para.paragraph_format.left_indent = Inches(0.3)
 
                     # Option image
@@ -497,7 +531,12 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
 
                             if opt_image_url in image_cache:
                                 img_bytes = BytesIO(image_cache[opt_image_url])
-                                doc.add_picture(img_bytes, width=Inches(OPTION_IMAGE_WIDTH))
+                                if insert_anchor is not None:
+                                    opt_img_para = add_doc_paragraph()
+                                    opt_img_para.paragraph_format.left_indent = Inches(0.3)
+                                    opt_img_para.add_run().add_picture(img_bytes, width=Inches(OPTION_IMAGE_WIDTH))
+                                else:
+                                    doc.add_picture(img_bytes, width=Inches(OPTION_IMAGE_WIDTH))
                         except Exception:
                             pass  # Skip images that fail to download
 
