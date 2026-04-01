@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { API } from "@/lib/config";
+import ConfirmModal from "@/components/layout/ConfirmModal";
 
 const POLL_MS = 10_000;
 
@@ -102,6 +103,8 @@ export default function LiveControlCentre() {
   const [error, setError] = useState<string | null>(null);
   const [retaking, setRetaking] = useState<number | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [retakeTarget, setRetakeTarget] = useState<{ userId: number; studentName: string } | null>(null);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [, tick] = useState(0); // forces 1s re-render for live countdowns
 
   const token = useRef<string>("");
@@ -171,8 +174,7 @@ export default function LiveControlCentre() {
     return () => { clearInterval(poll); clearInterval(clock); };
   }, [fetchAll]);
 
-  const handleRetake = useCallback(async (userId: number, studentName: string) => {
-    if (!confirm(`Allow ${studentName} to retake? Their current submission will be discarded.`)) return;
+  const executeRetake = useCallback(async (userId: number, studentName: string) => {
     setRetaking(userId);
     try {
       const res = await fetch(`${API}/exam/${examId}/retake`, {
@@ -197,8 +199,12 @@ export default function LiveControlCentre() {
     }
   }, [examId, fetchAll]);
 
-  const handleStop = useCallback(async () => {
-    if (!confirm("Stop the exam now? Students will no longer be able to submit.")) return;
+  const handleRetake = useCallback((userId: number, studentName: string) => {
+    if (retaking !== null) return;
+    setRetakeTarget({ userId, studentName });
+  }, [retaking]);
+
+  const executeStop = useCallback(async () => {
     setStopping(true);
     try {
       const res = await fetch(`${API}/exam/${examId}/stop`, {
@@ -218,6 +224,11 @@ export default function LiveControlCentre() {
       setStopping(false);
     }
   }, [examId, fetchAll]);
+
+  const handleStop = useCallback(() => {
+    if (stopping) return;
+    setShowStopConfirm(true);
+  }, [stopping]);
 
   // ── Loading / error states ───────────────────────────────────────────────
 
@@ -243,6 +254,34 @@ export default function LiveControlCentre() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      <ConfirmModal
+        open={retakeTarget !== null}
+        title="Allow Retake?"
+        description={retakeTarget
+          ? `Allow ${retakeTarget.studentName} to retake? Their current submission will be discarded.`
+          : ""}
+        confirmText="Allow retake"
+        busy={retakeTarget ? retaking === retakeTarget.userId : false}
+        onCancel={() => setRetakeTarget(null)}
+        onConfirm={() => {
+          if (!retakeTarget) return;
+          void executeRetake(retakeTarget.userId, retakeTarget.studentName);
+          setRetakeTarget(null);
+        }}
+      />
+
+      <ConfirmModal
+        open={showStopConfirm}
+        title="Stop Exam Now?"
+        description="Students will no longer be able to submit once the exam is stopped."
+        confirmText="Stop exam"
+        busy={stopping}
+        onCancel={() => setShowStopConfirm(false)}
+        onConfirm={() => {
+          void executeStop();
+          setShowStopConfirm(false);
+        }}
+      />
 
       {/* Header */}
       <div className="shrink-0 px-8 py-5 border-b border-zinc-800 flex items-center gap-4">
