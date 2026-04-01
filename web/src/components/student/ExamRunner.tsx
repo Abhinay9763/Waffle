@@ -12,6 +12,48 @@ import PolicyOverlay from "@/components/student/PolicyOverlay";
 import { ExamStructure, QuestionResponse } from "@/components/student/types";
 import { API } from "@/lib/config";
 
+type BlindModeState = "idle" | "speaking" | "listening" | "processing";
+
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: Event & { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onend: ((event: Event) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+type SpeechRecognitionCtorLike = new () => SpeechRecognitionLike;
+
+const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
+
+function parseBlindCommand(input: string): string | null {
+  const text = input.trim().toLowerCase();
+
+  const optionMap: Record<string, string> = {
+    a: "OPTION_A", "option a": "OPTION_A", "letter a": "OPTION_A", ay: "OPTION_A",
+    b: "OPTION_B", "option b": "OPTION_B", "letter b": "OPTION_B", bee: "OPTION_B", be: "OPTION_B",
+    c: "OPTION_C", "option c": "OPTION_C", "letter c": "OPTION_C", see: "OPTION_C",
+    d: "OPTION_D", "option d": "OPTION_D", "letter d": "OPTION_D", dee: "OPTION_D",
+    e: "OPTION_E", "option e": "OPTION_E", "letter e": "OPTION_E",
+    f: "OPTION_F", "option f": "OPTION_F", "letter f": "OPTION_F",
+  };
+  if (optionMap[text]) return optionMap[text];
+
+  if (text.includes("next")) return "NEXT";
+  if (text.includes("previous") || text.includes("prev") || text.includes("back")) return "PREV";
+  if (text.includes("mark") || text.includes("review")) return "MARK";
+  if (text.includes("repeat") || text.includes("again")) return "REPEAT";
+  if (text.includes("clear") || text.includes("remove")) return "CLEAR";
+  if (text.includes("submit") || text.includes("finish")) return "SUBMIT";
+  if (text.includes("unanswered") || text.includes("skipped")) return "UNANSWERED";
+  if (text.includes("cancel") || text.includes("no")) return "CANCEL";
+  if (text.includes("yes") || text.includes("confirm")) return "CONFIRM";
+  return null;
+}
+
 export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const router = useRouter();
   const questions = useMemo(() => exam.sections.flatMap((s) => s.questions), [exam.sections]);
@@ -22,6 +64,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showLeavePrompt, setShowLeavePrompt] = useState(false);
+  const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [warningCount, setWarningCount] = useState(0);
@@ -30,6 +73,9 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const [outOfFocusSecondsLeft, setOutOfFocusSecondsLeft] = useState<number | null>(null);
+  const [blindModeEnabled, setBlindModeEnabled] = useState(false);
+  const [blindModeState, setBlindModeState] = useState<BlindModeState>("idle");
+  const [showListeningBadge, setShowListeningBadge] = useState(false);
   const responsesRef = useRef<Record<number, QuestionResponse>>({});
   const submittedRef = useRef(false);
   const submittingRef = useRef(false);
@@ -44,6 +90,10 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const pendingDeltaRef = useRef<Record<number, QuestionResponse>>({});
   const lastFullSyncAtRef = useRef(0);
   const warningCountRef = useRef(0);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const blindModeStateRef = useRef<BlindModeState>("idle");
+  const blindSubmitConfirmRef = useRef(false);
+  const submitExamRef = useRef<(reason: "manual" | "timeup") => void>(() => {});
 
   const maxWarnings = Math.max(1, Number((exam.meta as ExamStructure["meta"] & { max_warnings?: number }).max_warnings ?? 3));
 
@@ -75,6 +125,10 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   useEffect(() => {
     warningCountRef.current = warningCount;
   }, [warningCount]);
+
+  useEffect(() => {
+    blindModeStateRef.current = blindModeState;
+  }, [blindModeState]);
 
   useEffect(() => {
     secureModeReachedRef.current = false;
@@ -112,6 +166,232 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       return false;
     }
   }, []);
+
+  const speakBlindText = useCallback((text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    setBlindModeState("speaking");
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.05;
+    utter.onend = () => {
+      setBlindModeState("idle");
+    };
+    utter.onerror = () => {
+      setBlindModeState("idle");
+    };
+    window.speechSynthesis.speak(utter);
+  }, []);
+
+  const setAnswer = useCallback((questionId: number, option: number | null) => {
+    setResponses((prev) => {
+      const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
+      const next = { ...curr, option };
+      pendingDeltaRef.current[questionId] = next;
+      return { ...prev, [questionId]: next };
+    });
+  }, []);
+
+  const toggleMark = useCallback((questionId: number) => {
+    setResponses((prev) => {
+      const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
+      const next = { ...curr, marked: !curr.marked };
+      pendingDeltaRef.current[questionId] = next;
+      return { ...prev, [questionId]: next };
+    });
+  }, []);
+
+  const speakQuestion = useCallback((questionIndex: number) => {
+    const q = questions[questionIndex];
+    if (!q) return;
+    const parts: string[] = [
+      `Question ${questionIndex + 1}. ${q.text}`,
+    ];
+    q.options.forEach((opt, i) => {
+      const letter = OPTION_LETTERS[i] ?? `${i + 1}`;
+      const txt = typeof opt === "string" ? opt : opt.text || "Image option";
+      parts.push(`Option ${letter}. ${txt}`);
+    });
+    speakBlindText(parts.join(". "));
+  }, [questions, speakBlindText]);
+
+  const stopBlindListening = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null;
+      recognitionRef.current.onerror = null;
+      recognitionRef.current.onresult = null;
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setShowListeningBadge(false);
+    setBlindModeState("idle");
+  }, []);
+
+  const startBlindListening = useCallback(() => {
+    if (!blindModeEnabled) return;
+    const speechWindow = window as Window & {
+      SpeechRecognition?: SpeechRecognitionCtorLike;
+      webkitSpeechRecognition?: SpeechRecognitionCtorLike;
+    };
+    const SpeechRecognitionCtor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) {
+      speakBlindText("Voice recognition is not supported in this browser.");
+      return;
+    }
+
+    setBlindModeState("listening");
+    setShowListeningBadge(true);
+    const rec: SpeechRecognitionLike = new SpeechRecognitionCtor();
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      const text = e.results[0]?.[0]?.transcript ?? "";
+      setBlindModeState("processing");
+      setShowListeningBadge(false);
+      const cmd = parseBlindCommand(text);
+      if (!active) {
+        setBlindModeState("idle");
+        return;
+      }
+      if (!cmd) {
+        speakBlindText("Say A, B, C, D, Next, Back, Mark, Clear, Repeat or Submit.");
+        return;
+      }
+
+      if (cmd.startsWith("OPTION_")) {
+        const letter = cmd.split("_")[1];
+        const idx = OPTION_LETTERS.indexOf(letter);
+        if (idx < 0 || idx >= (active?.options.length ?? 0)) {
+          speakBlindText("Invalid option for this question.");
+          return;
+        }
+        if (responses[active.question_id]?.option === idx) {
+          speakBlindText(`Option ${letter} already selected.`);
+          return;
+        }
+        setAnswer(active.question_id, idx);
+        speakBlindText(`Selected option ${letter}.`);
+        return;
+      }
+
+      if (cmd === "NEXT") {
+        if (activeIdx < questions.length - 1) {
+          setActiveIdx((v) => Math.min(questions.length - 1, v + 1));
+          setTimeout(() => speakQuestion(Math.min(questions.length - 1, activeIdx + 1)), 700);
+        } else {
+          speakBlindText("You are on the last question. Say submit to submit exam.");
+        }
+        return;
+      }
+
+      if (cmd === "PREV") {
+        if (activeIdx > 0) {
+          setActiveIdx((v) => Math.max(0, v - 1));
+          setTimeout(() => speakQuestion(Math.max(0, activeIdx - 1)), 700);
+        } else {
+          speakBlindText("You are on the first question.");
+        }
+        return;
+      }
+
+      if (cmd === "MARK") {
+        const before = responses[active.question_id];
+        const wasMarked = !!before?.marked;
+        toggleMark(active.question_id);
+        speakBlindText(wasMarked ? "Review mark removed." : "Marked question for review.");
+        return;
+      }
+
+      if (cmd === "REPEAT") {
+        speakQuestion(activeIdx);
+        return;
+      }
+
+      if (cmd === "CLEAR") {
+        if (responses[active.question_id]?.option === null || responses[active.question_id]?.option === undefined) {
+          speakBlindText("No answer selected for this question.");
+        } else {
+          setAnswer(active.question_id, null);
+          speakBlindText("Answer cleared.");
+        }
+        return;
+      }
+
+      if (cmd === "UNANSWERED") {
+        const nextUnanswered = questions.findIndex((q) => {
+          const r = responses[q.question_id];
+          return !r || r.option === null;
+        });
+        if (nextUnanswered < 0) {
+          speakBlindText("All questions are answered.");
+        } else {
+          setActiveIdx(nextUnanswered);
+          setTimeout(() => speakQuestion(nextUnanswered), 700);
+        }
+        return;
+      }
+
+      if (cmd === "SUBMIT") {
+        if (!blindSubmitConfirmRef.current) {
+          blindSubmitConfirmRef.current = true;
+          speakBlindText("Say submit again to confirm, or say cancel.");
+          setTimeout(() => {
+            blindSubmitConfirmRef.current = false;
+          }, 8000);
+          return;
+        }
+        blindSubmitConfirmRef.current = false;
+        setShowSubmitPrompt(true);
+        speakBlindText("Submit confirmation opened.");
+        return;
+      }
+
+      if (cmd === "CANCEL") {
+        blindSubmitConfirmRef.current = false;
+        setShowSubmitPrompt(false);
+        setShowLeavePrompt(false);
+        speakBlindText("Cancelled.");
+        return;
+      }
+
+      if (cmd === "CONFIRM" && showSubmitPrompt) {
+        setShowSubmitPrompt(false);
+        submitExamRef.current("manual");
+      }
+    };
+    rec.onerror = () => {
+      setBlindModeState("idle");
+      setShowListeningBadge(false);
+      speakBlindText("Could not understand. Press space and try again.");
+    };
+    rec.onend = () => {
+      recognitionRef.current = null;
+      setShowListeningBadge(false);
+      if (blindModeStateRef.current === "listening") {
+        setBlindModeState("idle");
+      }
+    };
+    recognitionRef.current = rec;
+    rec.start();
+  }, [blindModeEnabled, speakBlindText, active, activeIdx, questions, responses, showSubmitPrompt, setAnswer, toggleMark, speakQuestion]);
+
+  const toggleBlindMode = useCallback(() => {
+    const next = !blindModeEnabled;
+    setBlindModeEnabled(next);
+    if (next) {
+      eventQueueRef.current.push({ event: "blind_mode_enabled" });
+      speakBlindText(
+        "Blind mode activated. Press space bar to give voice commands. You can say A, B, C, D, Mark, Next, Back, Repeat, Clear, or Submit."
+      );
+    } else {
+      eventQueueRef.current.push({ event: "blind_mode_disabled" });
+      stopBlindListening();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      setBlindModeState("idle");
+    }
+  }, [blindModeEnabled, speakBlindText, stopBlindListening]);
 
   useEffect(() => {
     responsesRef.current = responses;
@@ -228,6 +508,12 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     }
     router.push("/history");
   }, [token, exam.meta.exam_id, buildSubmission, router]);
+
+  useEffect(() => {
+    submitExamRef.current = (reason: "manual" | "timeup") => {
+      void submitExam(reason);
+    };
+  }, [submitExam]);
 
   const clearOutOfFocusTermination = useCallback(() => {
     if (outOfFocusTimeoutRef.current) {
@@ -417,6 +703,26 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       }
     };
     const onKeydown = (e: KeyboardEvent) => {
+      if (blindModeEnabled && e.key === " ") {
+        e.preventDefault();
+        if (blindModeStateRef.current === "speaking") {
+          if (typeof window !== "undefined" && "speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+          }
+          setBlindModeState("idle");
+          setTimeout(() => startBlindListening(), 120);
+          return;
+        }
+        if (blindModeStateRef.current === "listening") {
+          stopBlindListening();
+          return;
+        }
+        if (blindModeStateRef.current === "idle") {
+          startBlindListening();
+          return;
+        }
+      }
+
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && k === "c") {
         e.preventDefault();
@@ -457,25 +763,16 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       document.removeEventListener("paste", onPaste);
       clearOutOfFocusTermination();
     };
-  }, [token, emitViolation, requestExamFullscreen, armOutOfFocusTermination, clearOutOfFocusTermination]);
+  }, [token, emitViolation, requestExamFullscreen, armOutOfFocusTermination, clearOutOfFocusTermination, blindModeEnabled, startBlindListening, stopBlindListening]);
 
-  const setAnswer = (questionId: number, option: number | null) => {
-    setResponses((prev) => {
-      const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
-      const next = { ...curr, option };
-      pendingDeltaRef.current[questionId] = next;
-      return { ...prev, [questionId]: next };
-    });
-  };
-
-  const toggleMark = (questionId: number) => {
-    setResponses((prev) => {
-      const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
-      const next = { ...curr, marked: !curr.marked };
-      pendingDeltaRef.current[questionId] = next;
-      return { ...prev, [questionId]: next };
-    });
-  };
+  useEffect(() => {
+    return () => {
+      stopBlindListening();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [stopBlindListening]);
 
   const onTimeUp = useCallback(() => {
     void submitExam("timeup");
@@ -484,6 +781,11 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const onBackClick = () => {
     if (submitting) return;
     setShowLeavePrompt(true);
+  };
+
+  const onSubmitClick = () => {
+    if (submitting) return;
+    setShowSubmitPrompt(true);
   };
 
   const confirmLeaveAndSubmit = () => {
@@ -543,6 +845,35 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
           </div>
         </div>
       )}
+      {showSubmitPrompt && (
+        <div className="fixed inset-0 z-[56] flex items-center justify-center bg-zinc-950/85 px-6 text-center">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <h2 className="text-lg font-semibold text-zinc-100">Submit exam?</h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              You cannot edit answers after submission.
+            </p>
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSubmitPrompt(false)}
+                className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-300 hover:border-zinc-500"
+              >
+                Continue exam
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSubmitPrompt(false);
+                  void submitExam("manual");
+                }}
+                className="rounded-lg bg-yellow-400 px-3 py-2 text-xs font-semibold text-zinc-900 hover:bg-yellow-300"
+              >
+                Submit now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {!isFullscreen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/95 px-6 text-center">
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
@@ -593,11 +924,17 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
           </div>
           <button
             type="button"
-            onClick={() => {
-              if (submitting) return;
-              const yes = window.confirm("Submit exam now? You cannot edit answers after submission.");
-              if (yes) void submitExam("manual");
-            }}
+            onClick={toggleBlindMode}
+            className={`inline-flex items-center rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${blindModeEnabled ? "border-sky-700/70 bg-sky-950/30 text-sky-300" : "border-zinc-700 text-zinc-300 hover:border-zinc-500"}`}
+          >
+            {blindModeEnabled ? "Blind: ON" : "Enable blind"}
+          </button>
+          {showListeningBadge && (
+            <span className="hidden text-[11px] text-red-300 sm:inline">Listening...</span>
+          )}
+          <button
+            type="button"
+            onClick={onSubmitClick}
             disabled={submitting}
             className="inline-flex items-center gap-1.5 rounded-lg bg-yellow-400 px-3 py-1.5 text-xs font-semibold text-zinc-900 hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
