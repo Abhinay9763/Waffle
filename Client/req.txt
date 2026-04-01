@@ -1,7 +1,0 @@
-PyQt6
-httpx
-pandas
-pyinstaller
-edge-tts
-pyaudio
-SpeechRecognition

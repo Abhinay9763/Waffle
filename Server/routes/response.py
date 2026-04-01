@@ -96,7 +96,7 @@ def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
 
 @router.post("/response/heartbeat", status_code=HTTP_200_OK)
 async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
-    """PyQt client calls this every X seconds to autosave and signal presence."""
+    """Web exam runtime calls this every X seconds to autosave and signal presence."""
     now = datetime.now(timezone.utc).isoformat()
 
     # Detect first-ever join for this student+exam and read current status.
