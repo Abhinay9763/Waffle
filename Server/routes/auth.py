@@ -14,6 +14,7 @@ from models import Register, Login, Role, Session, ApprovalStatus
 from supa import db
 from utils import hashPassword, verifyPassword, serializer, send_auth_mail, createSessionToken
 from deps import get_current_user
+from config import STUDENT_EMAIL_DOMAIN
 
 router = APIRouter()
 
@@ -30,7 +31,7 @@ async def register(user : Register,background_tasks : BackgroundTasks):
         # print(split.lower())
         # print(user.roll.lower())
         if  user.role == Role.student:
-            if split[0].lower() != user.roll.lower() or split[1].lower() != "smec.ac.in":
+            if split[0].lower() != user.roll.lower() or split[1].lower() != STUDENT_EMAIL_DOMAIN:
                 return {"please sign in with your college email id"}
         response = await db.client.table("Users").select("*").or_(f"email.eq.{user.email},roll.eq.{user.roll}").execute()
         # print(response)

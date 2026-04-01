@@ -6,7 +6,7 @@ import { getCookie } from "cookies-next";
 import Link from "next/link";
 import { Download, FileDown, FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { API } from "@/lib/config";
+import { API, PAPER_TEMPLATE_FILE } from "@/lib/config";
 
 interface Paper {
   id: number;
@@ -158,7 +158,7 @@ export default function PapersPage() {
       return;
     }
 
-    const res = await fetch(`${API}/paper/template/question_paper_template.xlsx`, {
+    const res = await fetch(`${API}/paper/template/${PAPER_TEMPLATE_FILE}`, {
       headers: { "x-session-token": token },
     }).catch(() => null);
     if (!res?.ok) {
@@ -171,7 +171,7 @@ export default function PapersPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "question_paper_template.xlsx";
+    a.download = PAPER_TEMPLATE_FILE;
     a.click();
     URL.revokeObjectURL(url);
   };

@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle2, Mail } from "lucide-react";
-import { API, LOGO } from "@/lib/config";
+import { API, APP_SHORT_NAME, LOGO, LOGO_ALT, ORG_DOMAIN, ORG_SHORT_NAME } from "@/lib/config";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -28,11 +28,11 @@ const schema = z
       });
     }
     if (data.role === "Student") {
-      const expected = `${data.roll.toLowerCase()}@smec.ac.in`;
+      const expected = `${data.roll.toLowerCase()}@${ORG_DOMAIN}`;
       if (data.email.toLowerCase() !== expected) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Students must use ${data.roll.toLowerCase()}@smec.ac.in`,
+          message: `Students must use ${data.roll.toLowerCase()}@${ORG_DOMAIN}`,
           path: ["email"],
         });
       }
@@ -46,7 +46,7 @@ type Role = "Student" | "Faculty";
 
 function WaffleLogo() {
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={LOGO} alt="SMEC logo" width={120} height={120} style={{ objectFit: "contain" }} />;
+  return <img src={LOGO} alt={LOGO_ALT} width={120} height={120} style={{ objectFit: "contain" }} />;
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -132,7 +132,7 @@ function SuccessState({ email }: { email: string }) {
     <div className="w-full max-w-sm space-y-8">
       <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
         <WaffleLogo />
-        <span className="text-3xl font-semibold text-zinc-100">Waffle</span>
+        <span className="text-3xl font-semibold text-zinc-100">{APP_SHORT_NAME}</span>
       </div>
 
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-8 space-y-5 text-center">
@@ -234,7 +234,7 @@ export default function RegisterForm() {
       >
         <div className="flex items-center gap-3 text-yellow-400">
           <WaffleLogo />
-          <span className="text-3xl font-semibold tracking-tight text-zinc-100">Waffle</span>
+          <span className="text-3xl font-semibold tracking-tight text-zinc-100">{APP_SHORT_NAME}</span>
         </div>
 
         <div className="space-y-8">
@@ -260,7 +260,7 @@ export default function RegisterForm() {
           </ul>
         </div>
 
-        <p className="text-zinc-500 text-xs">© {new Date().getFullYear()} SMEC. All rights reserved.</p>
+        <p className="text-zinc-500 text-xs">© {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.</p>
       </div>
 
       {/* ── Right form panel ──────────────────────────────────── */}
@@ -273,7 +273,7 @@ export default function RegisterForm() {
 
             <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
               <WaffleLogo />
-              <span className="text-3xl font-semibold text-zinc-100">Waffle</span>
+              <span className="text-3xl font-semibold text-zinc-100">{APP_SHORT_NAME}</span>
             </div>
 
             {/* Card underlay */}
@@ -337,12 +337,12 @@ export default function RegisterForm() {
                 type="email"
                 placeholder={
                   role === "Student" && roll
-                    ? `${roll.toLowerCase()}@smec.ac.in`
-                    : role === "Student" ? "roll@smec.ac.in" : "you@smec.ac.in"
+                    ? `${roll.toLowerCase()}@${ORG_DOMAIN}`
+                    : role === "Student" ? `roll@${ORG_DOMAIN}` : `you@${ORG_DOMAIN}`
                 }
                 hint={
                   role === "Student"
-                    ? "Must be your college email (roll@smec.ac.in)"
+                    ? `Must be your college email (roll@${ORG_DOMAIN})`
                     : "Your institutional or personal email"
                 }
                 disabled={isSubmitting}

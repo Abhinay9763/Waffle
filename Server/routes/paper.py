@@ -14,10 +14,11 @@ from supa import db, db_url
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from config import DOCX_TEMPLATE_ANCHOR_TEXT, PAPER_DOCX_TEMPLATE_NAME
 
 router = APIRouter()
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "template"
-PAPER_DOCX_TEMPLATE = TEMPLATE_DIR / "Template.docx"
+PAPER_DOCX_TEMPLATE = TEMPLATE_DIR / PAPER_DOCX_TEMPLATE_NAME
 
 
 def _normalize_option(value) -> int | None:
@@ -440,7 +441,7 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
     # Insert generated content right after the template heading block when possible.
     insert_anchor = None
     for idx, para in enumerate(doc.paragraphs):
-        if "www.smec.ac.in" in (para.text or "").lower():
+        if DOCX_TEMPLATE_ANCHOR_TEXT.lower() in (para.text or "").lower():
             if idx + 1 < len(doc.paragraphs):
                 insert_anchor = doc.paragraphs[idx + 1]
             break

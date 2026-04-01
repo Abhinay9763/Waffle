@@ -8,7 +8,7 @@ import { z } from "zod";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { setCookie } from "cookies-next";
-import { API, APP_NAME, LOGO } from "@/lib/config";
+import { API, APP_NAME, APP_SHORT_NAME, LOGO, LOGO_ALT, ORG_DOMAIN, ORG_SHORT_NAME } from "@/lib/config";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -19,7 +19,7 @@ type FormData = z.infer<typeof schema>;
 
 function WaffleLogo() {
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={LOGO} alt="SMEC logo" width={120} height={120} style={{ objectFit: "contain" }} />;
+  return <img src={LOGO} alt={LOGO_ALT} width={120} height={120} style={{ objectFit: "contain" }} />;
 }
 
 const FEATURES = [
@@ -131,7 +131,7 @@ export default function LoginForm() {
               <br />
               platform built for
               <br />
-              <span className="text-yellow-400">SMEC</span>
+              <span className="text-yellow-400">{ORG_SHORT_NAME}</span>
             </h2>
             <p className="text-zinc-400 text-sm leading-relaxed max-w-xs">
               Attend exams, track your progress, and get detailed
@@ -151,7 +151,7 @@ export default function LoginForm() {
 
         {/* Footer */}
         <p className="text-zinc-500 text-xs">
-          © {new Date().getFullYear()} SMEC. All rights reserved.
+          © {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.
         </p>
       </div>
 
@@ -162,7 +162,7 @@ export default function LoginForm() {
           {/* Mobile-only logo */}
           <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
             <WaffleLogo />
-            <span className="text-3xl font-semibold text-zinc-100">Waffle</span>
+            <span className="text-3xl font-semibold text-zinc-100">{APP_SHORT_NAME}</span>
           </div>
 
           {/* Card underlay */}
@@ -200,7 +200,7 @@ export default function LoginForm() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="you@smec.ac.in"
+                placeholder={`you@${ORG_DOMAIN}`}
                 className={`
                   w-full rounded-lg border bg-zinc-900 px-3.5 py-2.5
                   text-sm text-zinc-100 placeholder:text-zinc-600
