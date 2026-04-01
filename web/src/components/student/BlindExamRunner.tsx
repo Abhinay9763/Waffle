@@ -28,6 +28,25 @@ interface SpeechRecognitionLike {
 type SpeechRecognitionCtorLike = new () => SpeechRecognitionLike;
 
 const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
+const VOICE_COMMANDS = [
+  "A, B, C, D, E, F: select option",
+  "Next: go to next question",
+  "Previous / Back: go to previous question",
+  "Mark / Review: toggle mark for review",
+  "Repeat: read current question again",
+  "Clear: remove selected option",
+  "Unanswered / Skipped: jump to next unanswered",
+  "Submit: open submit confirmation",
+  "Confirm / Yes: confirm submit prompt",
+  "Cancel / No: close prompt",
+];
+
+type TranscriptEntry = {
+  id: string;
+  speaker: "you" | "assistant" | "system";
+  text: string;
+  at: string;
+};
 
 function parseBlindCommand(input: string): string | null {
   const text = input.trim().toLowerCase();
@@ -76,6 +95,14 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const [blindModeEnabled, setBlindModeEnabled] = useState(false);
   const [blindModeState, setBlindModeState] = useState<BlindModeState>("idle");
   const [showListeningBadge, setShowListeningBadge] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([
+    {
+      id: "init",
+      speaker: "system",
+      text: "Blind transcript is ready. Enable blind mode to begin voice interaction.",
+      at: new Date().toLocaleTimeString(),
+    },
+  ]);
   const responsesRef = useRef<Record<number, QuestionResponse>>({});
   const submittedRef = useRef(false);
   const submittingRef = useRef(false);
@@ -94,6 +121,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const blindModeStateRef = useRef<BlindModeState>("idle");
   const blindSubmitConfirmRef = useRef(false);
   const submitExamRef = useRef<(reason: "manual" | "timeup") => void>(() => {});
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   const maxWarnings = Math.max(1, Number((exam.meta as ExamStructure["meta"] & { max_warnings?: number }).max_warnings ?? 3));
   const uiLockedByBlind = blindModeEnabled;
@@ -132,6 +160,11 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   }, [blindModeState]);
 
   useEffect(() => {
+    if (!transcriptRef.current) return;
+    transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+  }, [transcript]);
+
+  useEffect(() => {
     secureModeReachedRef.current = false;
   }, [exam.meta.exam_id]);
 
@@ -168,7 +201,25 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     }
   }, []);
 
+  const appendTranscript = useCallback((speaker: TranscriptEntry["speaker"], text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setTranscript((prev) => {
+      const next = [
+        ...prev,
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          speaker,
+          text: trimmed,
+          at: new Date().toLocaleTimeString(),
+        },
+      ];
+      return next.slice(-80);
+    });
+  }, []);
+
   const speakBlindText = useCallback((text: string) => {
+    appendTranscript("assistant", text);
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     setBlindModeState("speaking");
@@ -181,7 +232,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       setBlindModeState("idle");
     };
     window.speechSynthesis.speak(utter);
-  }, []);
+  }, [appendTranscript]);
 
   const setAnswer = useCallback((questionId: number, option: number | null) => {
     setResponses((prev) => {
@@ -241,12 +292,14 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
     setBlindModeState("listening");
     setShowListeningBadge(true);
+    appendTranscript("system", "Listening...");
     const rec: SpeechRecognitionLike = new SpeechRecognitionCtor();
     rec.lang = "en-US";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
       const text = e.results[0]?.[0]?.transcript ?? "";
+      appendTranscript("you", text || "(no speech captured)");
       setBlindModeState("processing");
       setShowListeningBadge(false);
       const cmd = parseBlindCommand(text);
@@ -363,6 +416,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     rec.onerror = () => {
       setBlindModeState("idle");
       setShowListeningBadge(false);
+      appendTranscript("system", "Speech recognition error. Please try again.");
       speakBlindText("Could not understand. Press space and try again.");
     };
     rec.onend = () => {
@@ -374,25 +428,27 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     };
     recognitionRef.current = rec;
     rec.start();
-  }, [blindModeEnabled, speakBlindText, active, activeIdx, questions, responses, showSubmitPrompt, setAnswer, toggleMark, speakQuestion]);
+  }, [blindModeEnabled, speakBlindText, active, activeIdx, questions, responses, showSubmitPrompt, setAnswer, toggleMark, speakQuestion, appendTranscript]);
 
   const toggleBlindMode = useCallback(() => {
     const next = !blindModeEnabled;
     setBlindModeEnabled(next);
     if (next) {
       eventQueueRef.current.push({ event: "blind_mode_enabled" });
+      appendTranscript("system", "Blind mode enabled.");
       speakBlindText(
         "Blind mode activated. Press space bar to give voice commands. You can say A, B, C, D, Mark, Next, Back, Repeat, Clear, or Submit."
       );
     } else {
       eventQueueRef.current.push({ event: "blind_mode_disabled" });
+      appendTranscript("system", "Blind mode disabled.");
       stopBlindListening();
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
       setBlindModeState("idle");
     }
-  }, [blindModeEnabled, speakBlindText, stopBlindListening]);
+  }, [blindModeEnabled, speakBlindText, stopBlindListening, appendTranscript]);
 
   useEffect(() => {
     if (!uiLockedByBlind) return;
@@ -1045,6 +1101,38 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
               {submitError && (
                 <p className="text-xs text-red-400">{submitError}</p>
               )}
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Transcript</p>
+                  <span className="text-[11px] text-zinc-500">{blindModeState}</span>
+                </div>
+                <div ref={transcriptRef} className="h-52 space-y-2 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                  {transcript.map((line) => (
+                    <div key={line.id} className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                        {line.speaker} <span className="ml-1 normal-case tracking-normal">{line.at}</span>
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-200">{line.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400">Voice commands</p>
+                <div className="h-52 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                  <ul className="space-y-2 text-xs text-zinc-300">
+                    {VOICE_COMMANDS.map((cmd) => (
+                      <li key={cmd} className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-2">
+                        {cmd}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
             </div>
           </section>
 
