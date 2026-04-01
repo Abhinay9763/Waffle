@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import {
   Loader2, RefreshCw, Radio, CheckCircle2, Clock3, RotateCcw, AlertCircle, StopCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 import { API } from "@/lib/config";
 
 const POLL_MS = 10_000;
@@ -183,13 +184,14 @@ export default function LiveControlCentre() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        alert(body?.detail ?? "Could not grant retake.");
+        toast.error(body?.detail ?? "Could not grant retake.");
         return;
       }
 
       await fetchAll();
+      toast.success(`${studentName} can now retake the exam.`);
     } catch {
-      alert("Failed to fetch. Check backend server/network and try again.");
+      toast.error("Failed to fetch. Check backend server/network and try again.");
     } finally {
       setRetaking(null);
     }
@@ -206,12 +208,12 @@ export default function LiveControlCentre() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        alert(body?.detail ?? "Could not stop exam.");
+        toast.error(body?.detail ?? "Could not stop exam.");
         return;
       }
       await fetchAll();
     } catch {
-      alert("Failed to fetch. Check backend server/network and try again.");
+      toast.error("Failed to fetch. Check backend server/network and try again.");
     } finally {
       setStopping(false);
     }

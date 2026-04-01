@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
 import { Download, FileDown, FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
+import { toast } from "sonner";
 import { API } from "@/lib/config";
 
 interface Paper {
@@ -81,10 +82,10 @@ export default function PapersPage() {
       headers: { "x-session-token": token },
     }).catch(() => null);
     setDeletingId(null);
-    if (!res) { alert("Network error — could not reach server."); return; }
+    if (!res) { toast.error("Network error - could not reach server."); return; }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      alert(body.detail ?? `Delete failed (${res.status})`);
+      toast.error(body.detail ?? `Delete failed (${res.status})`);
       return;
     }
     setPapers(prev => prev.filter(p => p.id !== paper.id));
@@ -93,11 +94,11 @@ export default function PapersPage() {
   const handleImport = async (file: File) => {
     const token = getCookie("wfl-session") as string | undefined;
     if (!token) {
-      alert("Session expired. Please log in again.");
+      toast.error("Session expired. Please log in again.");
       return;
     }
     if (!file.name.toLowerCase().endsWith(".xlsx")) {
-      alert("Please upload an .xlsx file.");
+      toast.error("Please upload an .xlsx file.");
       return;
     }
 
@@ -112,14 +113,14 @@ export default function PapersPage() {
     setImporting(false);
 
     if (!res) {
-      alert("Network error while importing paper.");
+      toast.error("Network error while importing paper.");
       return;
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       const detail = body?.detail;
       if (typeof detail === "string") {
-        alert(detail);
+        toast.error(detail);
         return;
       }
       if (detail && typeof detail === "object") {
@@ -128,10 +129,10 @@ export default function PapersPage() {
         const extra = typeof detail.error_count === "number" && detail.error_count > errors.length
           ? `\n...and ${detail.error_count - errors.length} more error(s).`
           : "";
-        alert(`${message}${errors.length ? `\n\n- ${errors.join("\n- ")}` : ""}${extra}`);
+        toast.error(`${message}${errors.length ? ` | ${errors.join(" | ")}` : ""}${extra ? ` | ${extra.replace(/\n/g, " ")}` : ""}`);
         return;
       }
-      alert(`Import failed (${res.status})`);
+      toast.error(`Import failed (${res.status})`);
       return;
     }
 
@@ -153,7 +154,7 @@ export default function PapersPage() {
   const handleDownloadTemplate = async () => {
     const token = getCookie("wfl-session") as string | undefined;
     if (!token) {
-      alert("Session expired. Please log in again.");
+      toast.error("Session expired. Please log in again.");
       return;
     }
 
@@ -162,7 +163,7 @@ export default function PapersPage() {
     }).catch(() => null);
     if (!res?.ok) {
       const body = await res?.json().catch(() => ({}));
-      alert(body?.detail ?? "Template not available yet.");
+      toast.error(body?.detail ?? "Template not available yet.");
       return;
     }
 

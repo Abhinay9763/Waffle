@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import { CalendarDays, Loader2, Radio } from "lucide-react";
+import { toast } from "sonner";
 import { API } from "@/lib/config";
 
 interface Exam {
@@ -45,7 +46,7 @@ export default function StudentDashboard() {
   const handleStartExam = async (examId: number) => {
     const token = getCookie("wfl-session") as string | undefined;
     if (!token) {
-      alert("Session expired. Please login again.");
+      toast.error("Session expired. Please login again.");
       return;
     }
 
@@ -57,13 +58,13 @@ export default function StudentDashboard() {
       }).catch(() => null);
 
       if (!res) {
-        alert("Could not reach server. Please try again.");
+        toast.error("Could not reach server. Please try again.");
         return;
       }
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        alert(body?.detail ?? "You cannot enter this exam now.");
+        toast.error(body?.detail ?? "You cannot enter this exam now.");
         return;
       }
 

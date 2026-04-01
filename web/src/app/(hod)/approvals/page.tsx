@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import { UserCheck, UserX, Clock, Mail, Calendar, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { API } from "@/lib/config";
 
 interface PendingFaculty {
@@ -52,10 +53,10 @@ export default function FacultyApprovals() {
         setPendingFaculty(prev => prev.filter(f => f.id !== facultyId));
       } else {
         const body = await res.json().catch(() => ({}));
-        alert(body.detail ?? `Failed to ${action} faculty member`);
+        toast.error(body.detail ?? `Failed to ${action} faculty member`);
       }
     } catch {
-      alert(`Network error: Could not ${action} faculty member`);
+      toast.error(`Network error: Could not ${action} faculty member`);
     } finally {
       setProcessingId(null);
     }

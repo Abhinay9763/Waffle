@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCookie } from "cookies-next";
 import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Eraser, Flag, Loader2, Send } from "lucide-react";
+import { toast } from "sonner";
 import ExamTimer from "@/components/student/ExamTimer";
 import QuestionPalette from "@/components/student/QuestionPalette";
 import QuestionView from "@/components/student/QuestionView";
@@ -531,7 +532,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
     if (res.status === 403 || res.status === 404) {
       const body = await res.json().catch(() => ({}));
-      alert(body?.detail ?? "You can no longer continue this exam.");
+      toast.error(body?.detail ?? "You can no longer continue this exam.");
       router.replace("/history");
     }
   }, [token, exam.meta.exam_id, router]);
@@ -648,7 +649,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     setSubmitting(false);
     submittingRef.current = false;
     if (reason === "timeup") {
-      alert("Time is up. Your exam has been submitted.");
+      toast.success("Time is up. Your exam has been submitted.");
     }
     router.push("/history");
   }, [token, exam.meta.exam_id, buildSubmission, router]);
@@ -1231,6 +1232,14 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
                       </option>
                     ))}
                   </select>
+
+                  <button
+                    type="button"
+                    onClick={() => speakBlindText("This is a voice test sample for blind mode.")}
+                    className="inline-flex items-center rounded-md border border-zinc-700 px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:border-zinc-500"
+                  >
+                    Test voice
+                  </button>
 
                   <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-300">
                     <p><span className="text-zinc-500">Type:</span> {selectedVoice?.localService ? "Offline (local)" : "Online (remote)"}</p>

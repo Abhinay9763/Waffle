@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCookie } from "cookies-next";
 import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Eraser, Flag, Loader2, Send } from "lucide-react";
+import { toast } from "sonner";
 import ExamTimer from "@/components/student/ExamTimer";
 import QuestionPalette from "@/components/student/QuestionPalette";
 import QuestionView from "@/components/student/QuestionView";
@@ -138,7 +139,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
 
     if (res.status === 403 || res.status === 404) {
       const body = await res.json().catch(() => ({}));
-      alert(body?.detail ?? "You can no longer continue this exam.");
+      toast.error(body?.detail ?? "You can no longer continue this exam.");
       router.replace("/history");
     }
   }, [token, exam.meta.exam_id, router]);
@@ -255,7 +256,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     setSubmitting(false);
     submittingRef.current = false;
     if (reason === "timeup") {
-      alert("Time is up. Your exam has been submitted.");
+      toast.success("Time is up. Your exam has been submitted.");
     }
     router.push("/history");
   }, [token, exam.meta.exam_id, buildSubmission, router]);

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
 import { CalendarDays, ChevronRight, Loader2, Plus, Radio, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { API } from "@/lib/config";
 
 interface Exam {
@@ -132,7 +133,7 @@ export default function ExamsPage() {
       setExams((prev) => prev.filter((e) => e.id !== exam.id));
     } else {
       const body = await res?.json().catch(() => ({})) ?? {};
-      alert(body.detail ?? "Failed to delete exam.");
+      toast.error(body.detail ?? "Failed to delete exam.");
     }
   };
 
