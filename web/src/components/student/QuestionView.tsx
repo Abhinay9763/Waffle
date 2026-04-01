@@ -15,10 +15,12 @@ export default function QuestionView({
   question,
   selected,
   onChoose,
+  disabled = false,
 }: {
   question: ExamQuestion;
   selected: number | null;
   onChoose: (idx: number) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -42,8 +44,10 @@ export default function QuestionView({
             <button
               key={idx}
               type="button"
+              disabled={disabled}
+              tabIndex={disabled ? -1 : 0}
               onClick={() => onChoose(idx)}
-              className={`w-full rounded-xl border p-4 text-left transition-colors ${active ? "border-yellow-600/70 bg-yellow-950/20" : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700"}`}
+              className={`w-full rounded-xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${active ? "border-yellow-600/70 bg-yellow-950/20" : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700"}`}
             >
               <div className="flex items-start gap-3">
                 <span className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold ${active ? "bg-yellow-500 text-zinc-900" : "bg-zinc-800 text-zinc-300"}`}>

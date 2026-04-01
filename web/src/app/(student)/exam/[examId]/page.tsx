@@ -1,9 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import ExamRunner from "@/components/student/ExamRunner";
-import { API } from "@/lib/config";
-import { ExamStructure } from "@/components/student/types";
 
 export default async function StudentExamPage({
   params,
@@ -14,34 +11,38 @@ export default async function StudentExamPage({
   if (!token) redirect("/login");
 
   const { examId } = await params;
-  const res = await fetch(`${API}/exam/${examId}/take`, {
-    headers: { "x-session-token": token },
-    cache: "no-store",
-  }).catch(() => null);
 
-  if (!res) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <div className="space-y-3">
-          <p className="text-sm text-zinc-400">Could not reach the server.</p>
-          <Link href="/student" className="text-xs text-yellow-400 hover:text-yellow-300">Back to dashboard</Link>
+  return (
+    <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-3xl items-center px-6 py-10">
+      <div className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 shadow-lg shadow-black/30">
+        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Exam Mode</p>
+        <h1 className="mt-2 text-2xl font-semibold text-zinc-100">Choose how you want to take this exam</h1>
+        <p className="mt-3 text-sm text-zinc-400">
+          Normal mode uses the standard exam interface. Blind mode adds voice guidance and requires microphone access.
+        </p>
+
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <Link
+            href={`/exam/${examId}/normal`}
+            className="group rounded-xl border border-emerald-800/60 bg-emerald-950/30 p-5 transition hover:border-emerald-600 hover:bg-emerald-900/30"
+          >
+            <p className="text-sm font-semibold text-emerald-300">Normal Mode</p>
+            <p className="mt-2 text-xs text-zinc-300">Standard keyboard and mouse based exam flow.</p>
+          </Link>
+
+          <Link
+            href={`/exam/${examId}/blind`}
+            className="group rounded-xl border border-amber-800/60 bg-amber-950/20 p-5 transition hover:border-amber-600 hover:bg-amber-900/30"
+          >
+            <p className="text-sm font-semibold text-amber-300">Blind Mode</p>
+            <p className="mt-2 text-xs text-zinc-300">Voice-guided mode with text-to-speech and speech recognition.</p>
+          </Link>
         </div>
-      </div>
-    );
-  }
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <div className="space-y-3">
-          <p className="text-sm text-zinc-300">{body.detail ?? "Could not load exam."}</p>
-          <Link href="/student" className="text-xs text-yellow-400 hover:text-yellow-300">Back to dashboard</Link>
-        </div>
+        <Link href="/student" className="mt-8 inline-block text-xs text-yellow-400 hover:text-yellow-300">
+          Back to dashboard
+        </Link>
       </div>
-    );
-  }
-
-  const examData = (await res.json()) as ExamStructure;
-  return <ExamRunner exam={examData} />;
+    </div>
+  );
 }

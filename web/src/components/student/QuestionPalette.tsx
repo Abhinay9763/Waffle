@@ -19,11 +19,13 @@ export default function QuestionPalette({
   activeId,
   responses,
   onSelect,
+  disabled = false,
 }: {
   sections: ExamSection[];
   activeId: number;
   responses: Record<number, QuestionResponse>;
   onSelect: (questionId: number) => void;
+  disabled?: boolean;
 }) {
   let displayNumber = 0;
 
@@ -51,8 +53,10 @@ export default function QuestionPalette({
                   <button
                     key={question.question_id}
                     type="button"
+                    disabled={disabled}
+                    tabIndex={disabled ? -1 : 0}
                     onClick={() => onSelect(question.question_id)}
-                    className={buttonClass(question.question_id === activeId, state)}
+                    className={`${buttonClass(question.question_id === activeId, state)} disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     {displayNumber}
                   </button>

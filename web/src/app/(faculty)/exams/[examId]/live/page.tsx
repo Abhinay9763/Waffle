@@ -140,7 +140,7 @@ export default function LiveControlCentre() {
         ? `${API}/exam/${examId}/snapshot?since=${encodeURIComponent(since)}`
         : `${API}/exam/${examId}/snapshot`;
 
-      const res = await fetch(snapshotUrl, { headers: { "x-session-token": t } });
+      const res = await fetch(snapshotUrl, { cache: "no-store", headers: { "x-session-token": t } });
       if (!res.ok) { setError("Could not load exam data."); return; }
       const snap = await res.json();
 
@@ -174,12 +174,22 @@ export default function LiveControlCentre() {
     if (!confirm(`Allow ${studentName} to retake? Their current submission will be discarded.`)) return;
     setRetaking(userId);
     try {
-      await fetch(`${API}/exam/${examId}/retake`, {
+      const res = await fetch(`${API}/exam/${examId}/retake`, {
         method: "POST",
+        cache: "no-store",
         headers: { "x-session-token": token.current, "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId }),
       });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body?.detail ?? "Could not grant retake.");
+        return;
+      }
+
       await fetchAll();
+    } catch {
+      alert("Failed to fetch. Check backend server/network and try again.");
     } finally {
       setRetaking(null);
     }
@@ -189,11 +199,19 @@ export default function LiveControlCentre() {
     if (!confirm("Stop the exam now? Students will no longer be able to submit.")) return;
     setStopping(true);
     try {
-      await fetch(`${API}/exam/${examId}/stop`, {
+      const res = await fetch(`${API}/exam/${examId}/stop`, {
         method: "POST",
+        cache: "no-store",
         headers: { "x-session-token": token.current },
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body?.detail ?? "Could not stop exam.");
+        return;
+      }
       await fetchAll();
+    } catch {
+      alert("Failed to fetch. Check backend server/network and try again.");
     } finally {
       setStopping(false);
     }

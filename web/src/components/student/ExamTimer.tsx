@@ -17,15 +17,17 @@ export default function ExamTimer({
   endTime: string;
   onTimeUp: () => void;
 }) {
-  const [remaining, setRemaining] = useState(() => {
-    const diff = Math.floor((new Date(endTime).getTime() - Date.now()) / 1000);
-    return Math.max(0, diff);
-  });
+  const [remaining, setRemaining] = useState<number | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => {
+    const compute = () => {
       const diff = Math.floor((new Date(endTime).getTime() - Date.now()) / 1000);
-      const next = Math.max(0, diff);
+      return Math.max(0, diff);
+    };
+
+    setRemaining(compute());
+    const id = setInterval(() => {
+      const next = compute();
       setRemaining(next);
       if (next <= 0) {
         clearInterval(id);
@@ -35,11 +37,11 @@ export default function ExamTimer({
     return () => clearInterval(id);
   }, [endTime, onTimeUp]);
 
-  const low = useMemo(() => remaining <= 300, [remaining]);
+  const low = useMemo(() => (remaining ?? 0) <= 300, [remaining]);
 
   return (
     <div className={`rounded-lg border px-3 py-1.5 text-sm font-semibold tabular-nums ${low ? "border-amber-600/60 bg-amber-950/30 text-amber-300" : "border-zinc-700 bg-zinc-900 text-zinc-200"}`}>
-      {formatSeconds(remaining)}
+      {remaining === null ? "--:--:--" : formatSeconds(remaining)}
     </div>
   );
 }

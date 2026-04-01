@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
 from starlette.status import HTTP_201_CREATED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST
 
@@ -338,7 +339,10 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
 
     active, idle, submitted = _build_live_buckets(resp_res.data, total_questions)
 
-    return {"exam": exam, "active": active, "idle": idle, "submitted": submitted}
+    return JSONResponse(
+        content={"exam": exam, "active": active, "idle": idle, "submitted": submitted},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get("/exam/{exam_id}/logs")
@@ -360,7 +364,10 @@ async def getExamLogs(
         logs = await query.order("created_at", desc=False).limit(200).execute()
     else:
         logs = await query.order("created_at", desc=True).limit(100).execute()
-    return {"logs": logs.data}
+    return JSONResponse(
+        content={"logs": logs.data},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get("/exam/{exam_id}/snapshot")
@@ -397,14 +404,17 @@ async def getExamSnapshot(
     logs = logs_res.data or []
     last_log_at = logs[-1]["created_at"] if logs and since else (logs[0]["created_at"] if logs else None)
 
-    return {
-        "exam": exam,
-        "active": active,
-        "idle": idle,
-        "submitted": submitted,
-        "logs": logs,
-        "last_log_at": last_log_at,
-    }
+    return JSONResponse(
+        content={
+            "exam": exam,
+            "active": active,
+            "idle": idle,
+            "submitted": submitted,
+            "logs": logs,
+            "last_log_at": last_log_at,
+        },
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.post("/exam/{exam_id}/retake")
@@ -414,11 +424,27 @@ async def grantRetake(exam_id: int, body: RetakeRequest, user=Depends(get_curren
     if not exam or exam.get("creator_id") != user["id"]:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
+    existing = await db.client.table("Responses") \
+        .select("id") \
+        .eq("exam_id", exam_id) \
+        .eq("user_id", body.user_id) \
+        .eq("status", "submitted") \
+        .limit(1) \
+        .execute()
+
+    if not existing.data:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="No submitted response found for this student in this exam.",
+        )
+
     await db.client.table("Responses") \
         .update({"status": "in_progress", "submitted_at": None}) \
         .eq("exam_id", exam_id) \
         .eq("user_id", body.user_id) \
+        .eq("status", "submitted") \
         .execute()
+
     await db.client.table("ExamLogs").insert({
         "exam_id": exam_id,
         "user_id": body.user_id,
