@@ -5,10 +5,14 @@ from postgrest.exceptions import APIError
 from starlette.status import HTTP_201_CREATED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST
 
 from deps import get_current_user
+from memory_cache import delete_cache, get_cache, set_cache
 from models import Exam, RetakeRequest
 from supa import db
 
 router = APIRouter()
+
+EXAM_CACHE_TTL_SECONDS = 120
+PAPER_CACHE_TTL_SECONDS = 600
 
 
 def _is_missing_column_error(err: Exception, column_name: str) -> bool:
@@ -94,6 +98,75 @@ def _build_live_buckets(rows: list[dict], total_questions: int) -> tuple[list[di
     return active, idle, submitted
 
 
+def _count_questions(questions: dict) -> int:
+    total = 0
+    for section in questions.get("sections", []):
+        total += len(section.get("questions", []))
+    return total
+
+
+async def _get_exam_core(exam_id: int) -> dict | None:
+    key = f"exam:core:{exam_id}"
+    cached = get_cache(key)
+    if cached is not None:
+        return cached
+
+    try:
+        exam_res = await db.client.table("Exams") \
+            .select("id,name,total_marks,start,end,creator_id,questionpaper_id,join_window,max_warnings") \
+            .eq("id", exam_id) \
+            .execute()
+    except APIError as err:
+        if _is_missing_column_error(err, "max_warnings"):
+            exam_res = await db.client.table("Exams") \
+                .select("id,name,total_marks,start,end,creator_id,questionpaper_id,join_window") \
+                .eq("id", exam_id) \
+                .execute()
+        else:
+            raise
+
+    exam = exam_res.data[0] if exam_res.data else None
+    if exam is not None:
+        set_cache(key, exam, EXAM_CACHE_TTL_SECONDS)
+    return exam
+
+
+async def _get_paper_questions(paper_id: int) -> dict | None:
+    key = f"paper:questions:{paper_id}"
+    cached = get_cache(key)
+    if cached is not None:
+        return cached
+
+    paper_res = await db.client.table("QuestionPapers") \
+        .select("questions") \
+        .eq("id", paper_id) \
+        .execute()
+    paper = paper_res.data[0] if paper_res.data else None
+    if paper is not None:
+        set_cache(key, paper, PAPER_CACHE_TTL_SECONDS)
+    return paper
+
+
+async def _get_paper_full(paper_id: int) -> dict | None:
+    key = f"paper:full:{paper_id}"
+    cached = get_cache(key)
+    if cached is not None:
+        return cached
+
+    paper_res = await db.client.table("QuestionPapers") \
+        .select("questions,answers") \
+        .eq("id", paper_id) \
+        .execute()
+    paper = paper_res.data[0] if paper_res.data else None
+    if paper is not None:
+        set_cache(key, paper, PAPER_CACHE_TTL_SECONDS)
+    return paper
+
+
+def _invalidate_exam_cache(exam_id: int) -> None:
+    delete_cache(f"exam:core:{exam_id}")
+
+
 @router.post("/exam/create", status_code=HTTP_201_CREATED)
 async def createExam(exam: Exam, user=Depends(get_current_user)):
     data = exam.model_dump(exclude={"id", "created_at"})
@@ -108,20 +181,16 @@ async def createExam(exam: Exam, user=Depends(get_current_user)):
             response = await db.client.table("Exams").insert(legacy_data).execute()
         else:
             raise
+    _invalidate_exam_cache(response.data[0]["id"])
     return {"msg": "Exam created", "id": response.data[0]["id"]}
 
 
 @router.delete("/exam/{exam_id}")
 async def deleteExam(exam_id: int, user=Depends(get_current_user)):
-    exam_res = await db.client.table("Exams") \
-        .select("id,start,end") \
-        .eq("id", exam_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
-    if not exam_res.data:
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
-    exam = exam_res.data[0]
     now = datetime.now(timezone.utc)
     start = datetime.fromisoformat(exam["start"].replace("Z", "+00:00"))
     end   = datetime.fromisoformat(exam["end"].replace("Z", "+00:00"))
@@ -129,6 +198,7 @@ async def deleteExam(exam_id: int, user=Depends(get_current_user)):
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Cannot delete a live exam. Stop it first.")
 
     await db.client.table("Exams").delete().eq("id", exam_id).execute()
+    _invalidate_exam_cache(exam_id)
     return {"msg": "Exam deleted."}
 
 
@@ -153,22 +223,9 @@ async def takeExam(exam_id: int, user=Depends(get_current_user)):
     if user.get("role") != "Student":
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Only students can take exams.")
 
-    try:
-        exam_res = await db.client.table("Exams") \
-            .select("name,total_marks,start,end,questionpaper_id,join_window,max_warnings") \
-            .eq("id", exam_id) \
-            .execute()
-    except APIError as err:
-        if _is_missing_column_error(err, "max_warnings"):
-            exam_res = await db.client.table("Exams") \
-                .select("name,total_marks,start,end,questionpaper_id,join_window") \
-                .eq("id", exam_id) \
-                .execute()
-        else:
-            raise
-    if not exam_res.data:
+    exam = await _get_exam_core(exam_id)
+    if not exam:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
-    exam = exam_res.data[0]
 
     # Join-window check: reject late joiners
     join_window = exam.get("join_window")
@@ -191,11 +248,8 @@ async def takeExam(exam_id: int, user=Depends(get_current_user)):
     if submitted.data:
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="You have already submitted this exam.")
 
-    paper_res = await db.client.table("QuestionPapers") \
-        .select("questions") \
-        .eq("id", exam["questionpaper_id"]) \
-        .execute()
-    if not paper_res.data:
+    paper = await _get_paper_questions(exam["questionpaper_id"])
+    if not paper:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
 
     return {
@@ -207,7 +261,7 @@ async def takeExam(exam_id: int, user=Depends(get_current_user)):
             "total_marks": exam["total_marks"],
             "max_warnings": exam.get("max_warnings") or 3,
         },
-        "sections": paper_res.data[0]["questions"].get("sections", []),
+        "sections": paper["questions"].get("sections", []),
     }
 
 
@@ -224,23 +278,14 @@ async def listExams(user=Depends(get_current_user)):
 @router.get("/exam/{exam_id}/responses")
 async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
     # 1. Verify exam ownership
-    exam_res = await db.client.table("Exams") \
-        .select("*") \
-        .eq("id", exam_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
-    if not exam_res.data:
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
-    exam = exam_res.data[0]
 
     # 2. Fetch question paper for scoring
-    paper_res = await db.client.table("QuestionPapers") \
-        .select("questions,answers") \
-        .eq("id", exam["questionpaper_id"]) \
-        .execute()
-    if not paper_res.data:
+    paper = await _get_paper_full(exam["questionpaper_id"])
+    if not paper:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found.")
-    paper = paper_res.data[0]
 
     # 3. Fetch submitted responses with student info
     resp_res = await db.client.table("Responses") \
@@ -278,25 +323,12 @@ async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
 async def getExamLive(exam_id: int, user=Depends(get_current_user)):
     """Faculty live-tracker: in-progress students split into active / idle."""
     # 1. Verify exam ownership
-    exam_res = await db.client.table("Exams") \
-        .select("id,name,total_marks,start,end,questionpaper_id") \
-        .eq("id", exam_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
-    if not exam_res.data:
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
-    exam = exam_res.data[0]
 
-    # 2. Total question count from paper
-    paper_res = await db.client.table("QuestionPapers") \
-        .select("questions") \
-        .eq("id", exam["questionpaper_id"]) \
-        .execute()
-    total_questions = 0
-    if paper_res.data:
-        qs = paper_res.data[0]["questions"]
-        for section in qs.get("sections", []):
-            total_questions += len(section.get("questions", []))
+    paper = await _get_paper_questions(exam["questionpaper_id"])
+    total_questions = _count_questions(paper["questions"]) if paper else 0
 
     resp_res = await db.client.table("Responses") \
         .select("status,last_seen_at,submitted_at,user_id,response,Users(name,roll)") \
@@ -316,12 +348,8 @@ async def getExamLogs(
     user=Depends(get_current_user),
 ):
     """Recent event log for a live exam — faculty only."""
-    exam_res = await db.client.table("Exams") \
-        .select("id") \
-        .eq("id", exam_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
-    if not exam_res.data:
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     query = db.client.table("ExamLogs") \
@@ -342,24 +370,12 @@ async def getExamSnapshot(
     user=Depends(get_current_user),
 ):
     """Combined faculty snapshot: live state + logs in one request."""
-    exam_res = await db.client.table("Exams") \
-        .select("id,name,total_marks,start,end,questionpaper_id") \
-        .eq("id", exam_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
-    if not exam_res.data:
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
-    exam = exam_res.data[0]
 
-    paper_res = await db.client.table("QuestionPapers") \
-        .select("questions") \
-        .eq("id", exam["questionpaper_id"]) \
-        .execute()
-    total_questions = 0
-    if paper_res.data:
-        qs = paper_res.data[0]["questions"]
-        for section in qs.get("sections", []):
-            total_questions += len(section.get("questions", []))
+    paper = await _get_paper_questions(exam["questionpaper_id"])
+    total_questions = _count_questions(paper["questions"]) if paper else 0
 
     resp_res = await db.client.table("Responses") \
         .select("status,last_seen_at,submitted_at,user_id,response,Users(name,roll)") \
@@ -394,12 +410,8 @@ async def getExamSnapshot(
 @router.post("/exam/{exam_id}/retake")
 async def grantRetake(exam_id: int, body: RetakeRequest, user=Depends(get_current_user)):
     """Faculty: revert a submitted response back to in_progress so student can retake."""
-    exam_res = await db.client.table("Exams") \
-        .select("id") \
-        .eq("id", exam_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
-    if not exam_res.data:
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     await db.client.table("Responses") \
@@ -418,14 +430,11 @@ async def grantRetake(exam_id: int, body: RetakeRequest, user=Depends(get_curren
 @router.post("/exam/{exam_id}/stop")
 async def stopExam(exam_id: int, user=Depends(get_current_user)):
     """Faculty: end the exam immediately by setting end time to now."""
-    exam_res = await db.client.table("Exams") \
-        .select("id") \
-        .eq("id", exam_id) \
-        .eq("creator_id", user["id"]) \
-        .execute()
-    if not exam_res.data:
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     now = datetime.now(timezone.utc).isoformat()
     await db.client.table("Exams").update({"end": now}).eq("id", exam_id).execute()
+    _invalidate_exam_cache(exam_id)
     return {"msg": "Exam stopped."}
