@@ -1,10 +1,13 @@
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "QuizForge";
-export const APP_SHORT_NAME = process.env.NEXT_PUBLIC_APP_SHORT_NAME ?? "Waffle";
+export const APP_NAME =  process.env.NEXT_PUBLIC_APP_NAME ?? "SMECS";
+export const APP_DESC = process.env.NEXT_PUBLIC_APP_DESC ?? "St. Martin’s Exam Central System";
+export const APP_SHORT_NAME = process.env.NEXT_PUBLIC_APP_SHORT_NAME ?? "SMECS";
 export const ORG_SHORT_NAME = process.env.NEXT_PUBLIC_ORG_SHORT_NAME ?? "SMEC";
 export const ORG_DOMAIN = process.env.NEXT_PUBLIC_ORG_DOMAIN ?? "smec.ac.in";
 export const LOGO = process.env.NEXT_PUBLIC_LOGO_PATH ?? "/logo.png";
 export const LOGO_ALT = `${ORG_SHORT_NAME} logo`;
 export const PAPER_TEMPLATE_FILE = process.env.NEXT_PUBLIC_PAPER_TEMPLATE_FILE ?? "question_paper_template.xlsx";
-
+export const DEFAULT_VOICE_URI = "Google हिन्दी"
 // Keep localhost fallback for local development.
 export const API = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+
+

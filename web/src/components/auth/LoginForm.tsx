@@ -8,7 +8,7 @@ import { z } from "zod";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { setCookie } from "cookies-next";
-import { API, APP_NAME, APP_SHORT_NAME, LOGO, LOGO_ALT, ORG_DOMAIN, ORG_SHORT_NAME } from "@/lib/config";
+import { API, APP_DESC, APP_NAME, APP_SHORT_NAME, LOGO, LOGO_ALT, ORG_DOMAIN, ORG_SHORT_NAME } from "@/lib/config";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -116,11 +116,14 @@ export default function LoginForm() {
         {/* Logo */}
         <div className="flex items-center gap-3 text-yellow-400">
           <WaffleLogo />
-          <strong>
-            <span className="translate-y-2 text-5xl font-sans tracking-tight text-yellow-400">
-            {APP_NAME}
-          </span>
-          </strong>
+          <div>
+            <strong>
+              <span className="translate-y-2 text-5xl font-sans tracking-tight text-yellow-400">
+                {APP_NAME}
+              </span>
+            </strong>
+            <p className="mt-1 text-2xl text-zinc-400">{APP_DESC}</p>
+          </div>
         </div>
 
         {/* Tagline */}
@@ -150,9 +153,10 @@ export default function LoginForm() {
         </div>
 
         {/* Footer */}
-        <p className="text-zinc-500 text-xs">
-          © {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.
-        </p>
+        <div className="space-y-1 text-zinc-500 text-xs">
+          <p>© {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.</p>
+          <p>Design and Developed By S. Avinash and Abhinay Kumar</p>
+        </div>
       </div>
 
       {/* ── Right form panel ──────────────────────────────────── */}
@@ -170,8 +174,8 @@ export default function LoginForm() {
 
           {/* Heading */}
           <div className="space-y-1.5">
-            <h1 className="text-2xl font-bold text-zinc-100">Welcome back</h1>
-            <p className="text-sm text-zinc-400">Sign in to your account to continue</p>
+            <h1 className="text-2xl text-center font-bold text-zinc-100">Login</h1>
+            <p className="text-md text-zinc-400">Sign in to your account to continue</p>
           </div>
 
           {/* Form */}
@@ -295,6 +299,11 @@ export default function LoginForm() {
           </p>
 
           </div>{/* end card */}
+
+          <div className="lg:hidden space-y-1 text-zinc-500 text-xs text-center">
+            <p>© {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.</p>
+            <p>Design and Developed By S. Avinash and Abhinay Kumar</p>
+          </div>
         </div>
       </div>
 

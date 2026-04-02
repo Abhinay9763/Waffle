@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle2, Mail } from "lucide-react";
-import { API, APP_SHORT_NAME, LOGO, LOGO_ALT, ORG_DOMAIN, ORG_SHORT_NAME } from "@/lib/config";
+import { API, APP_DESC, APP_NAME, APP_SHORT_NAME, LOGO, LOGO_ALT, ORG_DOMAIN, ORG_SHORT_NAME } from "@/lib/config";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -158,6 +158,11 @@ function SuccessState({ email }: { email: string }) {
           ← Back to sign in
         </Link>
       </p>
+
+      <div className="lg:hidden space-y-1 text-zinc-500 text-xs text-center">
+        <p>© {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.</p>
+        <p>Design and Developed By S. Avinash and Abhinay Kumar</p>
+      </div>
     </div>
   );
 }
@@ -234,7 +239,14 @@ export default function RegisterForm() {
       >
         <div className="flex items-center gap-3 text-yellow-400">
           <WaffleLogo />
-          <span className="text-3xl font-semibold tracking-tight text-zinc-100">{APP_SHORT_NAME}</span>
+          <div>
+            <strong>
+              <span className="translate-y-2 text-5xl font-sans tracking-tight text-yellow-400">
+                {APP_NAME}
+              </span>
+            </strong>
+            <p className="mt-1 text-2xl text-zinc-400">{APP_DESC}</p>
+          </div>
         </div>
 
         <div className="space-y-8">
@@ -247,7 +259,7 @@ export default function RegisterForm() {
               <span className="text-yellow-400">Your journey.</span>
             </h2>
             <p className="text-zinc-400 text-sm leading-relaxed max-w-xs">
-              Create your Waffle account and get started in minutes.
+              Create your {APP_SHORT_NAME} account and get started in minutes.
             </p>
           </div>
           <ul className="space-y-3">
@@ -260,7 +272,10 @@ export default function RegisterForm() {
           </ul>
         </div>
 
-        <p className="text-zinc-500 text-xs">© {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.</p>
+        <div className="space-y-1 text-zinc-500 text-xs">
+          <p>© {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.</p>
+          <p>Design and Developed By S. Avinash and Abhinay Kumar</p>
+        </div>
       </div>
 
       {/* ── Right form panel ──────────────────────────────────── */}
@@ -389,6 +404,11 @@ export default function RegisterForm() {
               </button>
             </form>
             </div>{/* end card */}
+
+            <div className="lg:hidden space-y-1 text-zinc-500 text-xs text-center">
+              <p>© {new Date().getFullYear()} {ORG_SHORT_NAME}. All rights reserved.</p>
+              <p>Design and Developed By S. Avinash and Abhinay Kumar</p>
+            </div>
           </div>
         )}
       </div>
