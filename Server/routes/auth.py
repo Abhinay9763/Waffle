@@ -10,9 +10,9 @@ from starlette.status import (
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
 
-from models import Register, Login, Role, Session, ApprovalStatus
+from models import Register, Login, Role, Session, ApprovalStatus, ForgotPasswordRequest, ResetPasswordRequest
 from supa import db
-from utils import hashPassword, verifyPassword, serializer, send_auth_mail, createSessionToken
+from utils import hashPassword, verifyPassword, serializer, send_auth_mail, send_password_reset_mail, createSessionToken
 from deps import get_current_user
 from config import STUDENT_EMAIL_DOMAIN
 
@@ -138,6 +138,37 @@ async def loginUser(user : Login):
         status_code=HTTP_500_INTERNAL_SERVER_ERROR,
         detail="session creation failed"
     )
+
+
+@router.post("/user/forgot-password", status_code=HTTP_200_OK)
+async def forgotPassword(payload: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    email = payload.email.strip().lower()
+
+    user_res = await db.client.table("Users").select("id").eq("email", email).limit(1).execute()
+    if user_res.data:
+        background_tasks.add_task(send_password_reset_mail, email)
+
+    # Always return the same message to avoid user enumeration.
+    return {"msg": "If that email exists, a password reset link has been sent."}
+
+
+@router.post("/user/reset-password/{token}", status_code=HTTP_200_OK)
+async def resetPassword(token: str, payload: ResetPasswordRequest):
+    try:
+        data = serializer.loads(token, salt="password-reset", max_age=15 * 60)
+    except Exception:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link.")
+
+    email = str(data.get("email", "")).strip().lower()
+    if not email:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid reset token payload.")
+
+    user_res = await db.client.table("Users").select("id").eq("email", email).limit(1).execute()
+    if not user_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="User not found.")
+
+    await db.client.table("Users").update({"password": hashPassword(payload.password)}).eq("email", email).execute()
+    return {"msg": "Password reset successful."}
 
 
 # HOD-specific routes

@@ -35,6 +35,25 @@ def send_auth_mail(user : Register):
         server.login(mail_user,mail_pass)
         server.send_message(msg)
 
+
+def send_password_reset_mail(email: str):
+    token = serializer.dumps({"email": email}, salt="password-reset")
+    link = FRONTEND_URL + f"/reset-password/{token}"
+
+    msg = EmailMessage()
+    msg["Subject"] = f"{APP_NAME} Password Reset"
+    msg["From"] = mail_user
+    msg["To"] = email
+    msg.set_content(
+        "We received a request to reset your password.\n\n"
+        f"Reset your password using the link below:\n{link}\n\n"
+        "This link expires in 15 minutes."
+    )
+
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+        server.login(mail_user, mail_pass)
+        server.send_message(msg)
+
 def hashPassword(password : str):
     return bcrypt.hashpw(bytes(password,'utf-8'),bcrypt.gensalt()).decode('utf-8')
 def verifyPassword(p1,hashed):

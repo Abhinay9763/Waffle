@@ -27,6 +27,14 @@ class Login(BaseModel):
     email : str
     password : str
 
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    password: str
+
 class QuestionPaper(BaseModel):
     id : Optional[int] = None
     questions : dict
