@@ -108,7 +108,7 @@ def _count_questions(questions: dict) -> int:
 
 async def _get_exam_core(exam_id: int) -> dict | None:
     key = f"exam:core:{exam_id}"
-    cached = get_cache(key)
+    cached = await get_cache(key)
     if cached is not None:
         return cached
 
@@ -128,13 +128,13 @@ async def _get_exam_core(exam_id: int) -> dict | None:
 
     exam = exam_res.data[0] if exam_res.data else None
     if exam is not None:
-        set_cache(key, exam, EXAM_CACHE_TTL_SECONDS)
+        await set_cache(key, exam, EXAM_CACHE_TTL_SECONDS)
     return exam
 
 
 async def _get_paper_questions(paper_id: int) -> dict | None:
     key = f"paper:questions:{paper_id}"
-    cached = get_cache(key)
+    cached = await get_cache(key)
     if cached is not None:
         return cached
 
@@ -144,13 +144,13 @@ async def _get_paper_questions(paper_id: int) -> dict | None:
         .execute()
     paper = paper_res.data[0] if paper_res.data else None
     if paper is not None:
-        set_cache(key, paper, PAPER_CACHE_TTL_SECONDS)
+        await set_cache(key, paper, PAPER_CACHE_TTL_SECONDS)
     return paper
 
 
 async def _get_paper_full(paper_id: int) -> dict | None:
     key = f"paper:full:{paper_id}"
-    cached = get_cache(key)
+    cached = await get_cache(key)
     if cached is not None:
         return cached
 
@@ -160,12 +160,12 @@ async def _get_paper_full(paper_id: int) -> dict | None:
         .execute()
     paper = paper_res.data[0] if paper_res.data else None
     if paper is not None:
-        set_cache(key, paper, PAPER_CACHE_TTL_SECONDS)
+        await set_cache(key, paper, PAPER_CACHE_TTL_SECONDS)
     return paper
 
 
-def _invalidate_exam_cache(exam_id: int) -> None:
-    delete_cache(f"exam:core:{exam_id}")
+async def _invalidate_exam_cache(exam_id: int) -> None:
+    await delete_cache(f"exam:core:{exam_id}")
 
 
 @router.post("/exam/create", status_code=HTTP_201_CREATED)
@@ -182,7 +182,7 @@ async def createExam(exam: Exam, user=Depends(get_current_user)):
             response = await db.client.table("Exams").insert(legacy_data).execute()
         else:
             raise
-    _invalidate_exam_cache(response.data[0]["id"])
+    await _invalidate_exam_cache(response.data[0]["id"])
     return {"msg": "Exam created", "id": response.data[0]["id"]}
 
 
@@ -199,7 +199,7 @@ async def deleteExam(exam_id: int, user=Depends(get_current_user)):
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Cannot delete a live exam. Stop it first.")
 
     await db.client.table("Exams").delete().eq("id", exam_id).execute()
-    _invalidate_exam_cache(exam_id)
+    await _invalidate_exam_cache(exam_id)
     return {"msg": "Exam deleted."}
 
 
@@ -463,5 +463,5 @@ async def stopExam(exam_id: int, user=Depends(get_current_user)):
 
     now = datetime.now(timezone.utc).isoformat()
     await db.client.table("Exams").update({"end": now}).eq("id", exam_id).execute()
-    _invalidate_exam_cache(exam_id)
+    await _invalidate_exam_cache(exam_id)
     return {"msg": "Exam stopped."}

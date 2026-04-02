@@ -1,5 +1,5 @@
 from time import time
-from threading import Lock
+from asyncio import Lock
 from typing import Any
 
 
@@ -7,9 +7,9 @@ _store: dict[str, tuple[float, Any]] = {}
 _lock = Lock()
 
 
-def get_cache(key: str) -> Any | None:
+async def get_cache(key: str) -> Any | None:
     now = time()
-    with _lock:
+    async with _lock:
         item = _store.get(key)
         if not item:
             return None
@@ -20,12 +20,12 @@ def get_cache(key: str) -> Any | None:
         return value
 
 
-def set_cache(key: str, value: Any, ttl_seconds: int) -> None:
+async def set_cache(key: str, value: Any, ttl_seconds: int) -> None:
     expires_at = time() + max(1, ttl_seconds)
-    with _lock:
+    async with _lock:
         _store[key] = (expires_at, value)
 
 
-def delete_cache(key: str) -> None:
-    with _lock:
+async def delete_cache(key: str) -> None:
+    async with _lock:
         _store.pop(key, None)
