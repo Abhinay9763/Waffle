@@ -35,6 +35,10 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     password: str
 
+
+class StudentPreviewRequest(BaseModel):
+    email: str
+
 class QuestionPaper(BaseModel):
     id : Optional[int] = None
     questions : dict

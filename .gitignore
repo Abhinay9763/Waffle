@@ -43,3 +43,6 @@ crash.log
 *.bat
 builds/
 
+# ── Local datasets ─────────────────────────────────────
+Server/datasets/NRPB.json
+

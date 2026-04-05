@@ -1,4 +1,7 @@
 from datetime import datetime, timedelta, timezone
+import json
+from functools import lru_cache
+from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from starlette.background import BackgroundTasks
@@ -10,7 +13,7 @@ from starlette.status import (
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
 
-from models import Register, Login, Role, Session, ApprovalStatus, ForgotPasswordRequest, ResetPasswordRequest
+from models import Register, Login, Role, Session, ApprovalStatus, ForgotPasswordRequest, ResetPasswordRequest, StudentPreviewRequest
 from supa import db
 from utils import hashPassword, verifyPassword, serializer, send_auth_mail, send_password_reset_mail, createSessionToken
 from deps import get_current_user
@@ -18,21 +21,90 @@ from config import STUDENT_EMAIL_DOMAIN
 
 router = APIRouter()
 
+NRPB_DATASET_PATH = Path(__file__).resolve().parents[1] / "datasets" / "NRPB.json"
+
+
+@lru_cache(maxsize=1)
+def _load_nrpb_index() -> dict[str, dict]:
+    if not NRPB_DATASET_PATH.exists():
+        return {}
+    try:
+        with NRPB_DATASET_PATH.open("r", encoding="utf-8") as f:
+            rows = json.load(f)
+    except Exception:
+        return {}
+
+    index: dict[str, dict] = {}
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            roll = str(row.get("Roll", "")).strip().upper()
+            if roll:
+                index[roll] = row
+    return index
+
+
+def _find_student_by_roll(roll: str) -> dict | None:
+    key = (roll or "").strip().upper()
+    if not key:
+        return None
+    return _load_nrpb_index().get(key)
+
+
+def _derive_student_roll(email: str) -> str | None:
+    raw = (email or "").strip().lower()
+    if "@" not in raw:
+        return None
+    local, domain = raw.split("@", 1)
+    if not local or domain != STUDENT_EMAIL_DOMAIN:
+        return None
+    return local
+
+
+@router.post("/user/student-preview", status_code=HTTP_200_OK)
+async def getStudentPreview(payload: StudentPreviewRequest):
+    derived_roll = _derive_student_roll(payload.email)
+    if not derived_roll:
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail=f"Students must use college email in format roll@{STUDENT_EMAIL_DOMAIN}."
+        )
+
+    student = _find_student_by_roll(derived_roll)
+    if not student:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="please enter correct roll number"
+        )
+
+    return {
+        "student": {
+            "Name": student.get("Name", ""),
+            "Roll": student.get("Roll", ""),
+            "Pic": student.get("Pic", ""),
+            "Branch": student.get("Branch", ""),
+        }
+    }
+
 
 @router.post("/user/register",status_code=HTTP_202_ACCEPTED)
 async def register(user : Register,background_tasks : BackgroundTasks):
     print(user)
     try:
-        # link = generateLink(user.email)
-        if user.email.find("@") == -1: #WHY TF DOES THIS RETURN -1. JUST RETURN NONE BRO
-            return {"malformed mail"}
-        split = user.email.split("@")
-        # print(split)
-        # print(split.lower())
-        # print(user.roll.lower())
-        if  user.role == Role.student:
-            if split[0].lower() != user.roll.lower() or split[1].lower() != STUDENT_EMAIL_DOMAIN:
-                return {"please sign in with your college email id"}
+        if user.role == Role.student:
+            derived_roll = _derive_student_roll(user.email)
+            if not derived_roll:
+                raise HTTPException(
+                    status_code=HTTP_400_BAD_REQUEST,
+                    detail=f"Students must register with college email (roll@{STUDENT_EMAIL_DOMAIN})."
+                )
+            user.roll = derived_roll
+            if not _find_student_by_roll(user.roll):
+                raise HTTPException(
+                    status_code=HTTP_400_BAD_REQUEST,
+                    detail="please enter correct roll number"
+                )
         response = await db.client.table("Users").select("*").or_(f"email.eq.{user.email},roll.eq.{user.roll}").execute()
         # print(response)
         if response.data:
@@ -72,6 +144,15 @@ async def activateMail(token : str):
     existing = await db.client.table("Users").select("id").eq("email", user.email).execute()
     if existing.data:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Account already activated.")
+
+    if user.role == Role.student:
+        derived_roll = _derive_student_roll(user.email)
+        if not derived_roll:
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail=f"Students must register with college email (roll@{STUDENT_EMAIL_DOMAIN})."
+            )
+        user.roll = derived_roll
 
     user.password = hashPassword(user.password)
 

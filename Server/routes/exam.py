@@ -28,6 +28,12 @@ def _is_missing_column_error(err: Exception, column_name: str) -> bool:
 
 
 def compute_score(response: dict, answers: dict, questions_data: dict) -> int:
+    scope_ids_raw = response.get("grading_scope_question_ids")
+    scope_ids: set[int] | None = None
+    if isinstance(scope_ids_raw, list):
+        parsed_scope = {qid for qid in scope_ids_raw if isinstance(qid, int)}
+        scope_ids = parsed_scope if parsed_scope else set()
+
     # Build a flat question map: question_id → { marks, negative_marks }
     q_map: dict = {}
     for section in questions_data.get("sections", []):
@@ -36,7 +42,12 @@ def compute_score(response: dict, answers: dict, questions_data: dict) -> int:
 
     total = 0
     for r in response.get("responses", []):
-        qid = str(r.get("question_id"))
+        qid_raw = r.get("question_id")
+        if not isinstance(qid_raw, int):
+            continue
+        if scope_ids is not None and qid_raw not in scope_ids:
+            continue
+        qid = str(qid_raw)
         chosen = r.get("option")
         if chosen is None or qid not in answers:
             continue

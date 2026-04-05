@@ -48,6 +48,12 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 type Role = "Student" | "Faculty";
+type StudentPreview = {
+  Name: string;
+  Roll: string;
+  Pic: string;
+  Branch: string;
+};
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -186,6 +192,8 @@ export default function RegisterForm() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState("");
+  const [studentPreview, setStudentPreview] = useState<StudentPreview | null>(null);
+  const [pendingData, setPendingData] = useState<FormData | null>(null);
 
   const {
     register,
@@ -214,8 +222,12 @@ export default function RegisterForm() {
     }
   }, [role, studentDerivedRoll, setValue]);
 
-  const onSubmit = async (data: FormData) => {
-    setServerError(null);
+  useEffect(() => {
+    setStudentPreview(null);
+    setPendingData(null);
+  }, [email, role]);
+
+  const submitRegistration = async (data: FormData) => {
     let res: Response;
     try {
       res = await fetch(`${API}/user/register`, {
@@ -240,6 +252,42 @@ export default function RegisterForm() {
     }
     setSubmittedEmail(data.email);
     setSubmitted(true);
+  };
+
+  const onSubmit = async (data: FormData) => {
+    setServerError(null);
+    if (data.role === "Student") {
+      const previewRes = await fetch(`${API}/user/student-preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      }).catch(() => null);
+
+      if (!previewRes) {
+        setServerError("Could not reach the server.");
+        return;
+      }
+
+      if (!previewRes.ok) {
+        const err = await previewRes.json().catch(() => ({}));
+        setServerError(err.detail ?? "please enter correct roll number");
+        setStudentPreview(null);
+        setPendingData(null);
+        return;
+      }
+
+      const payload = await previewRes.json().catch(() => ({}));
+      const student = (payload.student ?? null) as StudentPreview | null;
+      if (!student) {
+        setServerError("please enter correct roll number");
+        return;
+      }
+      setStudentPreview(student);
+      setPendingData(data);
+      return;
+    }
+
+    await submitRegistration(data);
   };
 
   return (
@@ -329,6 +377,49 @@ export default function RegisterForm() {
               {serverError && (
                 <div className="rounded-lg bg-red-950/50 border border-red-900/60 px-3.5 py-3 text-sm text-red-400">
                   {serverError}
+                </div>
+              )}
+
+              {studentPreview && pendingData && (
+                <div className="rounded-lg border border-sky-800/60 bg-sky-950/30 p-3.5 space-y-3">
+                  <p className="text-xs uppercase tracking-wider text-sky-300">Student Verification</p>
+                  <div className="flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={studentPreview.Pic}
+                      alt={studentPreview.Name}
+                      className="h-16 w-16 rounded-md object-cover border border-zinc-700"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-zinc-100 truncate">{studentPreview.Name}</p>
+                      <p className="text-xs text-zinc-300">Roll: {studentPreview.Roll}</p>
+                      <p className="text-xs text-zinc-400">Branch: {studentPreview.Branch}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStudentPreview(null);
+                        setPendingData(null);
+                        void submitRegistration(pendingData);
+                      }}
+                      className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-emerald-400 transition-colors"
+                    >
+                      Yes This is me
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStudentPreview(null);
+                        setPendingData(null);
+                        setServerError("please enter correct roll number");
+                      }}
+                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:border-zinc-500 transition-colors"
+                    >
+                      No
+                    </button>
+                  </div>
                 </div>
               )}
 

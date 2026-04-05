@@ -73,6 +73,12 @@ def _merge_response_delta(base_response: dict, delta: list[dict] | None) -> dict
 
 
 def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
+    scope_ids_raw = response.get("grading_scope_question_ids")
+    scope_ids: set[int] | None = None
+    if isinstance(scope_ids_raw, list):
+        parsed_scope = {qid for qid in scope_ids_raw if isinstance(qid, int)}
+        scope_ids = parsed_scope if parsed_scope else set()
+
     q_map: dict = {}
     for section in questions_data.get("sections", []):
         for q in section.get("questions", []):
@@ -80,7 +86,12 @@ def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
 
     total = 0
     for r in response.get("responses", []):
-        qid = str(r.get("question_id"))
+        qid_raw = r.get("question_id")
+        if not isinstance(qid_raw, int):
+            continue
+        if scope_ids is not None and qid_raw not in scope_ids:
+            continue
+        qid = str(qid_raw)
         chosen = r.get("option")
         if chosen is None or qid not in q_map:
             continue
@@ -92,6 +103,26 @@ def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
             total -= q.get("negative_marks", 0)
 
     return max(0, total)
+
+
+def _compute_total_marks_for_submission(response: dict, questions_data: dict, fallback_total: int) -> int:
+    scope_ids_raw = response.get("grading_scope_question_ids")
+    if not isinstance(scope_ids_raw, list):
+        return fallback_total
+
+    scope_ids = {qid for qid in scope_ids_raw if isinstance(qid, int)}
+    if not scope_ids:
+        return fallback_total
+
+    total = 0
+    for section in questions_data.get("sections", []):
+        for q in section.get("questions", []):
+            qid = q.get("question_id")
+            if not isinstance(qid, int) or qid not in scope_ids:
+                continue
+            total += q.get("marks", 1)
+
+    return total if total > 0 else fallback_total
 
 
 @router.post("/response/heartbeat", status_code=HTTP_200_OK)
@@ -222,7 +253,12 @@ async def getMyResponses(user=Depends(get_current_user)):
             paper.get("answers", {}),
             paper.get("questions", {}),
         ) if paper else 0
-        total = exam["total_marks"] or 1
+        effective_total = _compute_total_marks_for_submission(
+            r["response"],
+            paper.get("questions", {}),
+            exam["total_marks"] or 1,
+        ) if paper else (exam["total_marks"] or 1)
+        total_for_pct = effective_total or 1
         result.append({
             "id":           r["id"],
             "submitted_at": r["submitted_at"],
@@ -231,8 +267,8 @@ async def getMyResponses(user=Depends(get_current_user)):
             "exam_start":   exam["start"],
             "exam_end":     exam["end"],
             "score":        score,
-            "total_marks":  exam["total_marks"],
-            "percentage":   round(score / total * 100, 1),
+            "total_marks":  effective_total,
+            "percentage":   round(score / total_for_pct * 100, 1),
         })
 
     return {"responses": result}
