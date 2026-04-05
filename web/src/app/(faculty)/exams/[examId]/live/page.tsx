@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { getCookie } from "cookies-next";
 import { useParams } from "next/navigation";
 import {
@@ -230,6 +230,19 @@ export default function LiveControlCentre() {
     setShowStopConfirm(true);
   }, [stopping]);
 
+  const total = active.length + idle.length + submitted.length;
+  const blindModeByRoll = useMemo(() => {
+    const byRoll: Record<string, boolean> = {};
+    for (const l of logs) {
+      const roll = (l.Users?.roll ?? "").trim();
+      if (!roll || byRoll[roll] !== undefined) continue;
+      const key = normalizeEventKey(l.event);
+      if (key === "blind_mode_enabled") byRoll[roll] = true;
+      if (key === "blind_mode_disabled") byRoll[roll] = false;
+    }
+    return byRoll;
+  }, [logs]);
+
   // ── Loading / error states ───────────────────────────────────────────────
 
   if (loading) {
@@ -247,8 +260,6 @@ export default function LiveControlCentre() {
       </div>
     );
   }
-
-  const total = active.length + idle.length + submitted.length;
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -343,7 +354,12 @@ export default function LiveControlCentre() {
             empty="No students currently active."
           >
             {active.map((s) => (
-              <StudentRow key={s.student_roll} name={s.student_name} roll={s.student_roll}>
+              <StudentRow
+                key={s.student_roll}
+                name={s.student_name}
+                roll={s.student_roll}
+                blindMode={blindModeByRoll[s.student_roll] === true}
+              >
                 <ProgressBar answered={s.answered} total={s.total} />
                 <span className="text-[11px] text-zinc-600 shrink-0">
                   {fmtSecsAgo(secsAgo(s.last_seen_at))}
@@ -360,7 +376,12 @@ export default function LiveControlCentre() {
             empty="No idle students."
           >
             {idle.map((s) => (
-              <StudentRow key={s.student_roll} name={s.student_name} roll={s.student_roll}>
+              <StudentRow
+                key={s.student_roll}
+                name={s.student_name}
+                roll={s.student_roll}
+                blindMode={blindModeByRoll[s.student_roll] === true}
+              >
                 <ProgressBar answered={s.answered} total={s.total} />
                 <span className="text-[11px] text-yellow-600 shrink-0">
                   {fmtSecsAgo(secsAgo(s.last_seen_at))}
@@ -377,7 +398,12 @@ export default function LiveControlCentre() {
             empty="No submissions yet."
           >
             {submitted.map((s) => (
-              <StudentRow key={s.student_roll} name={s.student_name} roll={s.student_roll}>
+              <StudentRow
+                key={s.student_roll}
+                name={s.student_name}
+                roll={s.student_roll}
+                blindMode={blindModeByRoll[s.student_roll] === true}
+              >
                 <span className="text-[11px] text-zinc-600 shrink-0">{fmtTime(s.submitted_at)}</span>
                 <button
                   onClick={() => handleRetake(s.user_id, s.student_name)}
@@ -415,6 +441,7 @@ export default function LiveControlCentre() {
                     <div className="min-w-0">
                       <span className="text-zinc-300 font-medium truncate block">
                         {l.Users?.name ?? "—"}
+                        {l.Users?.roll ? <span className="ml-2 text-[10px] text-zinc-500">({l.Users.roll})</span> : null}
                       </span>
                       <span className={`${meta.text}`}>{meta.label}</span>
                       <span className="text-zinc-600 ml-1.5">{fmtTime(l.created_at)}</span>
@@ -456,15 +483,22 @@ function Section({
 }
 
 function StudentRow({
-  name, roll, children,
+  name, roll, blindMode, children,
 }: {
-  name: string; roll: string; children: React.ReactNode;
+  name: string; roll: string; blindMode: boolean; children: React.ReactNode;
 }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800">
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-zinc-200 truncate">{name}</p>
-        <p className="text-[11px] text-zinc-600">{roll}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="text-sm font-medium text-zinc-200 truncate">{name}</p>
+          {blindMode ? (
+            <span className="shrink-0 rounded-full border border-sky-700/70 bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">
+              Blind mode
+            </span>
+          ) : null}
+        </div>
+        <p className="text-[11px] text-zinc-600">Roll: {roll}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">{children}</div>
     </div>

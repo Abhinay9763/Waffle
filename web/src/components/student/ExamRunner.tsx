@@ -46,6 +46,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const pendingDeltaRef = useRef<Record<number, QuestionResponse>>({});
   const lastFullSyncAtRef = useRef(0);
   const warningCountRef = useRef(0);
+  const normalModeInitLoggedRef = useRef(false);
 
   const maxWarnings = Math.max(1, Number((exam.meta as ExamStructure["meta"] & { max_warnings?: number }).max_warnings ?? 3));
 
@@ -81,6 +82,12 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   useEffect(() => {
     secureModeReachedRef.current = false;
   }, [exam.meta.exam_id]);
+
+  useEffect(() => {
+    if (normalModeInitLoggedRef.current) return;
+    normalModeInitLoggedRef.current = true;
+    eventQueueRef.current.push({ event: "blind_mode_disabled" });
+  }, []);
 
   const requestExamFullscreen = useCallback(async () => {
     const el = document.documentElement as HTMLElement & {

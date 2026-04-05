@@ -49,6 +49,15 @@ type TranscriptEntry = {
   at: string;
 };
 
+function hasImageContent(question: ExamStructure["sections"][number]["questions"][number]): boolean {
+  if (typeof question.image_url === "string" && question.image_url.trim()) {
+    return true;
+  }
+  return question.options.some((opt) => (
+    typeof opt !== "string" && typeof opt.image_url === "string" && opt.image_url.trim().length > 0
+  ));
+}
+
 function parseBlindCommand(input: string): string | null {
   const text = input.trim().toLowerCase();
 
@@ -76,7 +85,17 @@ function parseBlindCommand(input: string): string | null {
 
 export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const router = useRouter();
-  const questions = useMemo(() => exam.sections.flatMap((s) => s.questions), [exam.sections]);
+  const allQuestions = useMemo(() => exam.sections.flatMap((s) => s.questions), [exam.sections]);
+  const questions = useMemo(() => allQuestions.filter((q) => !hasImageContent(q)), [allQuestions]);
+  const hiddenQuestionCount = allQuestions.length - questions.length;
+  const blindTotalMarks = useMemo(
+    () => questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0),
+    [questions],
+  );
+  const gradingScopeQuestionIds = useMemo(
+    () => questions.map((q) => q.question_id),
+    [questions],
+  );
 
   const [activeIdx, setActiveIdx] = useState(0);
   const [responses, setResponses] = useState<Record<number, QuestionResponse>>({});
@@ -93,7 +112,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const [outOfFocusSecondsLeft, setOutOfFocusSecondsLeft] = useState<number | null>(null);
-  const [blindModeEnabled, setBlindModeEnabled] = useState(false);
+  const [blindModeEnabled, setBlindModeEnabled] = useState(true);
   const [blindModeState, setBlindModeState] = useState<BlindModeState>("idle");
   const [showListeningBadge, setShowListeningBadge] = useState(false);
   const [preferredVoice, setPreferredVoice] = useState<SpeechSynthesisVoice | null>(null);
@@ -126,6 +145,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const blindSubmitConfirmRef = useRef(false);
   const submitExamRef = useRef<(reason: "manual" | "timeup") => void>(() => {});
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const blindInitLoggedRef = useRef(false);
 
   const maxWarnings = Math.max(1, Number((exam.meta as ExamStructure["meta"] & { max_warnings?: number }).max_warnings ?? 3));
   const uiLockedByBlind = blindModeEnabled;
@@ -263,6 +283,13 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       return next.slice(-80);
     });
   }, []);
+
+  useEffect(() => {
+    if (!blindModeEnabled || blindInitLoggedRef.current) return;
+    blindInitLoggedRef.current = true;
+    eventQueueRef.current.push({ event: "blind_mode_enabled" });
+    appendTranscript("system", "Blind mode enabled.");
+  }, [blindModeEnabled, appendTranscript]);
 
   const speakBlindText = useCallback((text: string) => {
     appendTranscript("assistant", text);
@@ -554,8 +581,9 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     return {
       student_roll: studentRoll,
       responses: Object.values(responses),
+      grading_scope_question_ids: gradingScopeQuestionIds,
     };
-  }, [responses, studentRoll]);
+  }, [responses, studentRoll, gradingScopeQuestionIds]);
 
   const sendHeartbeat = useCallback(async () => {
     if (!token || submitted || submitting) return;
@@ -953,6 +981,21 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   };
 
   if (!active) {
+    if (questions.length === 0) {
+      return (
+        <div className="flex h-full items-center justify-center px-6 text-center">
+          <div className="max-w-lg space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <h2 className="text-lg font-semibold text-zinc-100">Blind mode unavailable for this paper</h2>
+            <p className="text-sm text-zinc-400">
+              All questions in this exam contain image content, so there are no blind-mode compatible questions to attempt.
+            </p>
+            <Link href="/student" className="inline-flex rounded-lg bg-yellow-400 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-yellow-300">
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex h-full items-center justify-center text-sm text-zinc-500">
         No questions found for this exam.
@@ -1081,7 +1124,10 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
           <div className="h-5 w-px bg-zinc-800" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-zinc-100">{exam.meta.exam_name}</h1>
-            <p className="text-xs text-zinc-500">{exam.meta.total_marks} marks</p>
+            <p className="text-xs text-zinc-500">
+              {blindTotalMarks} marks
+              {hiddenQuestionCount > 0 ? ` (${hiddenQuestionCount} image question${hiddenQuestionCount === 1 ? "" : "s"} excluded in blind mode)` : ""}
+            </p>
           </div>
           <div className="hidden min-w-37.5 text-right text-[11px] text-zinc-500 sm:block">
             {autosaveState === "saving" && <span>Saving...</span>}
@@ -1226,8 +1272,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
                     onChange={(e) => setSelectedVoiceURI(e.target.value || null)}
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-yellow-500"
                   >
-                    {availableVoices.map((voice) => (
-                      <option key={voice.voiceURI} value={voice.voiceURI}>
+                    {availableVoices.map((voice, index) => (
+                      <option key={`${voice.voiceURI}-${voice.name}-${voice.lang}-${index}`} value={voice.voiceURI}>
                         {voice.name} ({voice.lang})
                       </option>
                     ))}

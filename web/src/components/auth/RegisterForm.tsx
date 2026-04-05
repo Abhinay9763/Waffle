@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,7 +15,7 @@ const schema = z
     role: z.enum(["Student", "Faculty"]),
     name: z.string().min(2, "Name must be at least 2 characters"),
     email: z.string().email("Enter a valid email address"),
-    roll: z.string().min(1, "This field is required"),
+    roll: z.string().optional().default(""),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
   })
@@ -28,14 +28,21 @@ const schema = z
       });
     }
     if (data.role === "Student") {
-      const expected = `${data.roll.toLowerCase()}@${ORG_DOMAIN}`;
-      if (data.email.toLowerCase() !== expected) {
+      const email = data.email.trim().toLowerCase();
+      const suffix = `@${ORG_DOMAIN}`;
+      if (!email.endsWith(suffix) || email.indexOf("@") <= 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Students must use ${data.roll.toLowerCase()}@${ORG_DOMAIN}`,
+          message: `Students must use college email in the format roll@${ORG_DOMAIN}`,
           path: ["email"],
         });
       }
+    } else if (!data.roll.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "This field is required",
+        path: ["roll"],
+      });
     }
   });
 
@@ -192,7 +199,20 @@ export default function RegisterForm() {
   });
 
   const role = watch("role") as Role;
-  const roll = watch("roll") ?? "";
+  const email = watch("email") ?? "";
+  const studentDerivedRoll = useMemo(() => {
+    const cleaned = email.trim().toLowerCase();
+    const suffix = `@${ORG_DOMAIN}`;
+    if (!cleaned.endsWith(suffix)) return "";
+    const local = cleaned.slice(0, -suffix.length).trim();
+    return local;
+  }, [email]);
+
+  useEffect(() => {
+    if (role === "Student") {
+      setValue("roll", studentDerivedRoll, { shouldValidate: true });
+    }
+  }, [role, studentDerivedRoll, setValue]);
 
   const onSubmit = async (data: FormData) => {
     setServerError(null);
@@ -205,7 +225,7 @@ export default function RegisterForm() {
           name: data.name,
           email: data.email,
           password: data.password,
-          roll: data.roll,
+          roll: data.role === "Student" ? studentDerivedRoll : data.roll,
           role: data.role,
         }),
       });
@@ -351,13 +371,11 @@ export default function RegisterForm() {
                 id="email" label="Email address"
                 type="email"
                 placeholder={
-                  role === "Student" && roll
-                    ? `${roll.toLowerCase()}@${ORG_DOMAIN}`
-                    : role === "Student" ? `roll@${ORG_DOMAIN}` : `you@${ORG_DOMAIN}`
+                  role === "Student" ? `roll@${ORG_DOMAIN}` : `you@${ORG_DOMAIN}`
                 }
                 hint={
                   role === "Student"
-                    ? `Must be your college email (roll@${ORG_DOMAIN})`
+                    ? `Roll number will be derived from your college email (roll@${ORG_DOMAIN})`
                     : "Your institutional or personal email"
                 }
                 disabled={isSubmitting}
@@ -365,14 +383,27 @@ export default function RegisterForm() {
                 registration={register("email")}
               />
 
-              <InputField
-                id="roll"
-                label={role === "Student" ? "Roll number" : "Employee ID"}
-                placeholder={role === "Student" ? "e.g. 25K81A0561" : "e.g. FAC2024"}
-                disabled={isSubmitting}
-                error={errors.roll?.message}
-                registration={register("roll")}
-              />
+              {role === "Student" ? (
+                <InputField
+                  id="roll"
+                  label="Roll number"
+                  placeholder="Derived from your email"
+                  disabled
+                  hint="Auto-filled from the part before @ in your college email"
+                  error={errors.roll?.message}
+                  registration={register("roll")}
+                  rightSlot={null}
+                />
+              ) : (
+                <InputField
+                  id="roll"
+                  label="Employee ID"
+                  placeholder="e.g. FAC2024"
+                  disabled={isSubmitting}
+                  error={errors.roll?.message}
+                  registration={register("roll")}
+                />
+              )}
 
               <PasswordField
                 id="password" label="Password"
