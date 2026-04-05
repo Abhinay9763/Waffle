@@ -15,6 +15,8 @@ interface Paper {
   total_marks: number;
 }
 
+type AudienceMode = "all" | "selected";
+
 const schema = z
   .object({
     name: z.string().min(1, "Exam name is required"),
@@ -23,6 +25,8 @@ const schema = z
     end: z.string().min(1, "End time is required"),
     duration_minutes: z.coerce.number().min(1, "Duration must be at least 1 minute"),
     max_warnings: z.coerce.number().int().min(1, "Must be at least 1 warning").max(20, "Keep this at 20 or less"),
+    audience_mode: z.enum(["all", "selected"]),
+    allowed_sections: z.array(z.string()).default([]),
     join_window: z.preprocess(
       (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
       z.number().int().min(1, "Must be at least 1 minute").optional(),
@@ -35,6 +39,10 @@ const schema = z
   .refine((d) => new Date(d.end) > new Date(d.start), {
     message: "End time must be after start time",
     path: ["end"],
+  })
+  .refine((d) => d.audience_mode === "all" || d.allowed_sections.length > 0, {
+    message: "Select at least one section",
+    path: ["allowed_sections"],
   });
 
 type FormData = z.infer<typeof schema>;
@@ -92,6 +100,7 @@ function SuccessState({ name }: { name: string }) {
 export default function ExamScheduleForm() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [papersLoading, setPapersLoading] = useState(true);
+  const [sectionOptions, setSectionOptions] = useState<string[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [minDatetime, setMinDatetime] = useState("");
@@ -116,12 +125,16 @@ export default function ExamScheduleForm() {
     defaultValues: {
       duration_minutes: 120, // Default to 2 hours
       max_warnings: 3,
+      audience_mode: "all",
+      allowed_sections: [],
     }
   });
 
   const paperIdVal = watch("questionpaper_id");
   const startTime = watch("start");
   const duration = watch("duration_minutes");
+  const audienceMode = watch("audience_mode") as AudienceMode;
+  const selectedSections = watch("allowed_sections") ?? [];
   const selectedPaper = papers.find((p) => p.id === Number(paperIdVal));
 
   // Auto-update end time when start time or duration changes
@@ -145,6 +158,11 @@ export default function ExamScheduleForm() {
       .then((d) => setPapers(d.papers ?? []))
       .catch(() => {})
       .finally(() => setPapersLoading(false));
+
+    fetch(`${API}/exam/sections`, { headers: { "x-session-token": token } })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setSectionOptions((d.sections ?? []) as string[]))
+      .catch(() => setSectionOptions([]));
   }, []);
 
   const onSubmit = async (data: FormData) => {
@@ -165,6 +183,7 @@ export default function ExamScheduleForm() {
           end: new Date(data.end).toISOString(),
           creator_id: 0,
           max_warnings: data.max_warnings,
+          allowed_sections: data.audience_mode === "selected" ? data.allowed_sections : [],
           join_window: data.join_window ?? null,
         }),
       });
@@ -363,6 +382,59 @@ export default function ExamScheduleForm() {
             <p className="text-xs text-zinc-600">Students cannot join after this many minutes. Leave blank for no limit.</p>
             <FieldError message={errors.join_window?.message} />
           </div>
+
+            {/* Audience sections */}
+            <div className="space-y-1.5">
+              <Label>Audience</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setValue("audience_mode", "all", { shouldValidate: true })}
+                  className={`rounded-lg border py-2.5 px-3 text-sm font-medium transition-colors ${audienceMode === "all" ? "border-yellow-500/70 bg-yellow-500/10 text-yellow-300" : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"}`}
+                >
+                  All sections
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setValue("audience_mode", "selected", { shouldValidate: true })}
+                  className={`rounded-lg border py-2.5 px-3 text-sm font-medium transition-colors ${audienceMode === "selected" ? "border-yellow-500/70 bg-yellow-500/10 text-yellow-300" : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"}`}
+                >
+                  Selected sections
+                </button>
+              </div>
+
+              {audienceMode === "selected" && (
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+                  {sectionOptions.length === 0 ? (
+                    <p className="text-xs text-zinc-500">No section presets found. Add them in dataset mapping.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {sectionOptions.map((section) => {
+                        const checked = selectedSections.includes(section);
+                        return (
+                          <label key={section} className="flex items-center gap-2 rounded-md border border-zinc-800 px-2 py-1.5 text-xs text-zinc-300">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...selectedSections, section]
+                                  : selectedSections.filter((s) => s !== section);
+                                setValue("allowed_sections", next, { shouldValidate: true, shouldDirty: true });
+                              }}
+                              className="h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900 text-yellow-500"
+                            />
+                            <span>{section}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <FieldError message={errors.allowed_sections?.message as string | undefined} />
+            </div>
 
           {/* Max warnings */}
           <div className="space-y-1.5">

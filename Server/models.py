@@ -56,6 +56,7 @@ class Exam(BaseModel):
     questionpaper_id : int
     join_window : Optional[int] = None  # minutes after start; None = no limit
     max_warnings : Optional[int] = 3
+    allowed_sections: Optional[list[str]] = None
 
 class Response(BaseModel):
     id : Optional[int] = None

@@ -1,4 +1,7 @@
 from datetime import datetime, timezone, timedelta
+import json
+from functools import lru_cache
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -14,6 +17,104 @@ router = APIRouter()
 
 EXAM_CACHE_TTL_SECONDS = 120
 PAPER_CACHE_TTL_SECONDS = 600
+SECTION_MAPPING_PATH = Path(__file__).resolve().parents[1] / "datasets" / "section_mapping.json"
+
+
+@lru_cache(maxsize=1)
+def _load_section_mapping() -> dict:
+    if not SECTION_MAPPING_PATH.exists():
+        return {}
+    try:
+        with SECTION_MAPPING_PATH.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _token_to_rank(token: str) -> int | None:
+    raw = (token or "").strip().upper()
+    if len(raw) != 2:
+        return None
+    try:
+        return int(raw, 36)
+    except ValueError:
+        return None
+
+
+def _derive_student_section_from_roll(roll: str) -> str | None:
+    raw_roll = (roll or "").strip().upper()
+    if len(raw_roll) < 4:
+        return None
+
+    suffix = raw_roll[-4:]
+    branch_code = suffix[:2]
+    serial = suffix[2:]
+    serial_rank = _token_to_rank(serial)
+    if serial_rank is None:
+        return None
+
+    mapping = _load_section_mapping()
+    section_ranges = mapping.get("section_ranges", {}) if isinstance(mapping, dict) else {}
+    branch_ranges = section_ranges.get(branch_code, {}) if isinstance(section_ranges, dict) else {}
+    if not isinstance(branch_ranges, dict):
+        return None
+
+    for section_name, bounds in branch_ranges.items():
+        if not isinstance(bounds, list) or len(bounds) != 2:
+            continue
+        start_rank = _token_to_rank(str(bounds[0]))
+        end_rank = _token_to_rank(str(bounds[1]))
+        if start_rank is None or end_rank is None:
+            continue
+        if start_rank <= serial_rank <= end_rank:
+            return str(section_name).strip().upper()
+
+    return None
+
+
+def _list_sections() -> list[str]:
+    mapping = _load_section_mapping()
+    section_ranges = mapping.get("section_ranges", {}) if isinstance(mapping, dict) else {}
+    if not isinstance(section_ranges, dict):
+        return []
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for branch_code in section_ranges:
+        branch_data = section_ranges.get(branch_code, {})
+        if not isinstance(branch_data, dict):
+            continue
+        for section_name in branch_data:
+            normalized = str(section_name).strip().upper()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            result.append(normalized)
+    return result
+
+
+def _normalize_allowed_sections(items: list[str] | None) -> list[str]:
+    if not items:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        token = str(item).strip().upper()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        normalized.append(token)
+    return normalized
+
+
+def _is_section_allowed(allowed_sections: list[str] | None, student_section: str | None) -> bool:
+    scoped = _normalize_allowed_sections(allowed_sections)
+    if not scoped:
+        return True
+    if not student_section:
+        return False
+    return student_section.strip().upper() in set(scoped)
 
 
 def _is_missing_column_error(err: Exception, column_name: str) -> bool:
@@ -125,13 +226,27 @@ async def _get_exam_core(exam_id: int) -> dict | None:
 
     try:
         exam_res = await db.client.table("Exams") \
-            .select("id,name,total_marks,start,end,creator_id,questionpaper_id,join_window,max_warnings") \
+            .select("id,name,total_marks,start,end,creator_id,questionpaper_id,join_window,max_warnings,allowed_sections") \
             .eq("id", exam_id) \
             .execute()
     except APIError as err:
-        if _is_missing_column_error(err, "max_warnings"):
+        if _is_missing_column_error(err, "allowed_sections"):
+            try:
+                exam_res = await db.client.table("Exams") \
+                    .select("id,name,total_marks,start,end,creator_id,questionpaper_id,join_window,max_warnings") \
+                    .eq("id", exam_id) \
+                    .execute()
+            except APIError as err2:
+                if _is_missing_column_error(err2, "max_warnings"):
+                    exam_res = await db.client.table("Exams") \
+                        .select("id,name,total_marks,start,end,creator_id,questionpaper_id,join_window") \
+                        .eq("id", exam_id) \
+                        .execute()
+                else:
+                    raise
+        elif _is_missing_column_error(err, "max_warnings"):
             exam_res = await db.client.table("Exams") \
-                .select("id,name,total_marks,start,end,creator_id,questionpaper_id,join_window") \
+                .select("id,name,total_marks,start,end,creator_id,questionpaper_id,join_window,allowed_sections") \
                 .eq("id", exam_id) \
                 .execute()
         else:
@@ -139,6 +254,7 @@ async def _get_exam_core(exam_id: int) -> dict | None:
 
     exam = exam_res.data[0] if exam_res.data else None
     if exam is not None:
+        exam["allowed_sections"] = _normalize_allowed_sections(exam.get("allowed_sections"))
         await set_cache(key, exam, EXAM_CACHE_TTL_SECONDS)
     return exam
 
@@ -182,13 +298,24 @@ async def _invalidate_exam_cache(exam_id: int) -> None:
 @router.post("/exam/create", status_code=HTTP_201_CREATED)
 async def createExam(exam: Exam, user=Depends(get_current_user)):
     data = exam.model_dump(exclude={"id", "created_at"})
+    data["allowed_sections"] = _normalize_allowed_sections(data.get("allowed_sections"))
     data["creator_id"] = user["id"]
     data["start"] = data["start"].isoformat()
     data["end"] = data["end"].isoformat()
     try:
         response = await db.client.table("Exams").insert(data).execute()
     except APIError as err:
-        if _is_missing_column_error(err, "max_warnings"):
+        if _is_missing_column_error(err, "allowed_sections"):
+            legacy_data = {k: v for k, v in data.items() if k != "allowed_sections"}
+            try:
+                response = await db.client.table("Exams").insert(legacy_data).execute()
+            except APIError as err2:
+                if _is_missing_column_error(err2, "max_warnings"):
+                    legacy_data = {k: v for k, v in legacy_data.items() if k != "max_warnings"}
+                    response = await db.client.table("Exams").insert(legacy_data).execute()
+                else:
+                    raise
+        elif _is_missing_column_error(err, "max_warnings"):
             legacy_data = {k: v for k, v in data.items() if k != "max_warnings"}
             response = await db.client.table("Exams").insert(legacy_data).execute()
         else:
@@ -214,16 +341,39 @@ async def deleteExam(exam_id: int, user=Depends(get_current_user)):
     return {"msg": "Exam deleted."}
 
 
+@router.get("/exam/sections")
+async def listExamSections(user=Depends(get_current_user)):
+    if user.get("role") not in {"Faculty", "HOD", "Admin"}:
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Only faculty can access section presets.")
+    return {"sections": _list_sections()}
+
+
 @router.get("/exam/available")
 async def availableExams(user=Depends(get_current_user)):
     """All exams visible to students — no creator filter."""
-    response = await db.client.table("Exams") \
-        .select("id,name,total_marks,start,end,Users!creator_id(name)") \
-        .order("start") \
-        .execute()
+    should_filter_by_section = user.get("role") == "Student"
+    student_section = _derive_student_section_from_roll(str(user.get("roll", ""))) if should_filter_by_section else None
+    try:
+        response = await db.client.table("Exams") \
+            .select("id,name,total_marks,start,end,allowed_sections,Users!creator_id(name)") \
+            .order("start") \
+            .execute()
+    except APIError as err:
+        if _is_missing_column_error(err, "allowed_sections"):
+            response = await db.client.table("Exams") \
+                .select("id,name,total_marks,start,end,Users!creator_id(name)") \
+                .order("start") \
+                .execute()
+        else:
+            raise
+
     exams = []
     for e in response.data:
+        allowed_sections = _normalize_allowed_sections(e.get("allowed_sections"))
+        if should_filter_by_section and not _is_section_allowed(allowed_sections, student_section):
+            continue
         faculty = e.pop("Users", None)
+        e["allowed_sections"] = allowed_sections
         e["faculty_name"] = faculty["name"] if faculty else ""
         exams.append(e)
     return {"exams": exams}
@@ -238,6 +388,13 @@ async def takeExam(exam_id: int, user=Depends(get_current_user)):
     exam = await _get_exam_core(exam_id)
     if not exam:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    student_section = _derive_student_section_from_roll(str(user.get("roll", "")))
+    if not _is_section_allowed(exam.get("allowed_sections"), student_section):
+        raise HTTPException(
+            status_code=HTTP_403_FORBIDDEN,
+            detail="This exam is not available for your section.",
+        )
 
     # Join-window check: reject late joiners
     join_window = exam.get("join_window")
