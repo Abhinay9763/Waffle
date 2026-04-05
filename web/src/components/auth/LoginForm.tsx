@@ -17,7 +17,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-function WaffleLogo() {
+function AppLogo() {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={LOGO} alt={LOGO_ALT} width={120} height={120} style={{ objectFit: "contain" }} />;
 }
@@ -115,7 +115,7 @@ export default function LoginForm() {
       >
         {/* Logo */}
         <div className="flex items-center gap-3 text-yellow-400">
-          <WaffleLogo />
+          <AppLogo />
           <div>
             <strong>
               <span className="translate-y-2 text-5xl font-sans tracking-tight text-yellow-400">
@@ -165,7 +165,7 @@ export default function LoginForm() {
 
           {/* Mobile-only logo */}
           <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
-            <WaffleLogo />
+            <AppLogo />
             <span className="text-3xl font-semibold text-zinc-100">{APP_SHORT_NAME}</span>
           </div>
 

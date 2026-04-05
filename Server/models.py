@@ -17,11 +17,11 @@ class ApprovalStatus(str, Enum):
     rejected = "rejected"
 
 class Register(BaseModel):
-    name : str
+    name : str = ""
     email : str
     password : str
-    roll : str
-    role : Role #= Role.student
+    roll : str = ""
+    role : Role = Role.student
 
 class Login(BaseModel):
     email : str

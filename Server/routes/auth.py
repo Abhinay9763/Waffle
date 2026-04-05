@@ -52,6 +52,13 @@ def _find_student_by_roll(roll: str) -> dict | None:
     return _load_nrpb_index().get(key)
 
 
+def _derive_display_name_from_email(email: str) -> str:
+    local = ((email or "").strip().split("@", 1)[0]).strip()
+    if not local:
+        return ""
+    return local.replace(".", " ").replace("_", " ").replace("-", " ").strip().title()
+
+
 def _derive_student_roll(email: str) -> str | None:
     raw = (email or "").strip().lower()
     if "@" not in raw:
@@ -100,10 +107,19 @@ async def register(user : Register,background_tasks : BackgroundTasks):
                     detail=f"Students must register with college email (roll@{STUDENT_EMAIL_DOMAIN})."
                 )
             user.roll = derived_roll
-            if not _find_student_by_roll(user.roll):
+            student = _find_student_by_roll(user.roll)
+            if not student:
                 raise HTTPException(
                     status_code=HTTP_400_BAD_REQUEST,
                     detail="please enter correct roll number"
+                )
+            user.name = str(student.get("Name", "")).strip() or user.name
+            user.roll = str(student.get("Roll", user.roll)).strip() or user.roll
+        else:
+            if not user.roll.strip() or not user.name.strip():
+                raise HTTPException(
+                    status_code=HTTP_400_BAD_REQUEST,
+                    detail="Faculty registration requires full name and employee ID."
                 )
         response = await db.client.table("Users").select("*").or_(f"email.eq.{user.email},roll.eq.{user.roll}").execute()
         # print(response)
@@ -152,7 +168,20 @@ async def activateMail(token : str):
                 status_code=HTTP_400_BAD_REQUEST,
                 detail=f"Students must register with college email (roll@{STUDENT_EMAIL_DOMAIN})."
             )
-        user.roll = derived_roll
+        student = _find_student_by_roll(derived_roll)
+        if not student:
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail="please enter correct roll number"
+            )
+        user.roll = str(student.get("Roll", derived_roll)).strip() or derived_roll
+        user.name = str(student.get("Name", "")).strip() or user.name
+    else:
+        if not user.roll.strip() or not user.name.strip():
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail="Faculty registration requires full name and employee ID."
+            )
 
     user.password = hashPassword(user.password)
 

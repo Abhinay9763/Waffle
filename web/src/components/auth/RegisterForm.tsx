@@ -13,7 +13,7 @@ import { API, APP_DESC, APP_NAME, APP_SHORT_NAME, LOGO, LOGO_ALT, ORG_DOMAIN, OR
 const schema = z
   .object({
     role: z.enum(["Student", "Faculty"]),
-    name: z.string().min(2, "Name must be at least 2 characters"),
+    name: z.string().optional().default(""),
     email: z.string().email("Enter a valid email address"),
     roll: z.string().optional().default(""),
     password: z.string().min(8, "Password must be at least 8 characters"),
@@ -37,7 +37,17 @@ const schema = z
           path: ["email"],
         });
       }
-    } else if (!data.roll.trim()) {
+      return;
+    }
+
+    if ((data.name ?? "").trim().length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Name must be at least 2 characters",
+        path: ["name"],
+      });
+    }
+    if (!(data.roll ?? "").trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "This field is required",
@@ -57,7 +67,7 @@ type StudentPreview = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function WaffleLogo() {
+function AppLogo() {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={LOGO} alt={LOGO_ALT} width={120} height={120} style={{ objectFit: "contain" }} />;
 }
@@ -144,7 +154,7 @@ function SuccessState({ email }: { email: string }) {
   return (
     <div className="w-full max-w-sm space-y-8">
       <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
-        <WaffleLogo />
+        <AppLogo />
         <span className="text-3xl font-semibold text-zinc-100">{APP_SHORT_NAME}</span>
       </div>
 
@@ -198,8 +208,8 @@ export default function RegisterForm() {
   const {
     register,
     handleSubmit,
-    watch,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -208,19 +218,6 @@ export default function RegisterForm() {
 
   const role = watch("role") as Role;
   const email = watch("email") ?? "";
-  const studentDerivedRoll = useMemo(() => {
-    const cleaned = email.trim().toLowerCase();
-    const suffix = `@${ORG_DOMAIN}`;
-    if (!cleaned.endsWith(suffix)) return "";
-    const local = cleaned.slice(0, -suffix.length).trim();
-    return local;
-  }, [email]);
-
-  useEffect(() => {
-    if (role === "Student") {
-      setValue("roll", studentDerivedRoll, { shouldValidate: true });
-    }
-  }, [role, studentDerivedRoll, setValue]);
 
   useEffect(() => {
     setStudentPreview(null);
@@ -234,10 +231,10 @@ export default function RegisterForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: data.name,
+          name: data.role === "Faculty" ? (data.name ?? "") : "",
           email: data.email,
           password: data.password,
-          roll: data.role === "Student" ? studentDerivedRoll : data.roll,
+          roll: data.role === "Faculty" ? (data.roll ?? "") : "",
           role: data.role,
         }),
       });
@@ -256,38 +253,38 @@ export default function RegisterForm() {
 
   const onSubmit = async (data: FormData) => {
     setServerError(null);
-    if (data.role === "Student") {
-      const previewRes = await fetch(`${API}/user/student-preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.email }),
-      }).catch(() => null);
-
-      if (!previewRes) {
-        setServerError("Could not reach the server.");
-        return;
-      }
-
-      if (!previewRes.ok) {
-        const err = await previewRes.json().catch(() => ({}));
-        setServerError(err.detail ?? "please enter correct roll number");
-        setStudentPreview(null);
-        setPendingData(null);
-        return;
-      }
-
-      const payload = await previewRes.json().catch(() => ({}));
-      const student = (payload.student ?? null) as StudentPreview | null;
-      if (!student) {
-        setServerError("please enter correct roll number");
-        return;
-      }
-      setStudentPreview(student);
-      setPendingData(data);
+    if (data.role === "Faculty") {
+      await submitRegistration(data);
       return;
     }
 
-    await submitRegistration(data);
+    const previewRes = await fetch(`${API}/user/student-preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: data.email }),
+    }).catch(() => null);
+
+    if (!previewRes) {
+      setServerError("Could not reach the server.");
+      return;
+    }
+
+    if (!previewRes.ok) {
+      const err = await previewRes.json().catch(() => ({}));
+      setServerError(err.detail ?? "please enter correct roll number");
+      setStudentPreview(null);
+      setPendingData(null);
+      return;
+    }
+
+    const payload = await previewRes.json().catch(() => ({}));
+    const student = (payload.student ?? null) as StudentPreview | null;
+    if (!student) {
+      setServerError("please enter correct roll number");
+      return;
+    }
+    setStudentPreview(student);
+    setPendingData(data);
   };
 
   return (
@@ -306,7 +303,7 @@ export default function RegisterForm() {
         }}
       >
         <div className="flex items-center gap-3 text-yellow-400">
-          <WaffleLogo />
+          <AppLogo />
           <div>
             <strong>
               <span className="translate-y-2 text-5xl font-sans tracking-tight text-yellow-400">
@@ -355,7 +352,7 @@ export default function RegisterForm() {
           <div className="w-full max-w-sm space-y-7">
 
             <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
-              <WaffleLogo />
+              <AppLogo />
               <span className="text-3xl font-semibold text-zinc-100">{APP_SHORT_NAME}</span>
             </div>
 
@@ -423,7 +420,18 @@ export default function RegisterForm() {
                 </div>
               )}
 
-              {/* Role selector */}
+              <InputField
+                id="email" label="Email address"
+                type="email"
+                placeholder={role === "Student" ? `roll@${ORG_DOMAIN}` : `you@${ORG_DOMAIN}`}
+                hint={role === "Student"
+                  ? `Students must use college email (roll@${ORG_DOMAIN})`
+                  : "Your institutional or personal email"}
+                disabled={isSubmitting || !!studentPreview}
+                error={errors.email?.message}
+                registration={register("email")}
+              />
+
               <div className="space-y-1.5">
                 <span className="block text-sm font-medium text-zinc-300">I am a</span>
                 <div className="grid grid-cols-2 gap-2">
@@ -431,10 +439,11 @@ export default function RegisterForm() {
                     <button
                       key={r}
                       type="button"
-                      onClick={() => setValue("role", r, { shouldValidate: true })}
+                      onClick={() => setValue("role", r, { shouldValidate: true, shouldDirty: true, shouldTouch: true })}
+                      disabled={!!studentPreview}
                       className={`
                         relative flex items-center justify-center gap-2 rounded-lg border py-2.5 px-4
-                        text-sm font-medium transition-all
+                        text-sm font-medium transition-all disabled:opacity-60
                         ${role === r
                           ? "border-yellow-500/70 bg-yellow-500/10 text-yellow-300 shadow-[0_0_0_1px_rgba(234,179,8,0.25)]"
                           : "border-zinc-800 bg-zinc-900 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
@@ -450,69 +459,44 @@ export default function RegisterForm() {
                 </div>
               </div>
 
-              <InputField
-                id="name" label="Full name"
-                placeholder="Your full name"
-                disabled={isSubmitting}
-                error={errors.name?.message}
-                registration={register("name")}
-              />
+              {role === "Faculty" && (
+                <>
+                  <InputField
+                    id="name" label="Full name"
+                    placeholder="Your full name"
+                    disabled={isSubmitting || !!studentPreview}
+                    error={errors.name?.message}
+                    registration={register("name")}
+                  />
 
-              <InputField
-                id="email" label="Email address"
-                type="email"
-                placeholder={
-                  role === "Student" ? `roll@${ORG_DOMAIN}` : `you@${ORG_DOMAIN}`
-                }
-                hint={
-                  role === "Student"
-                    ? `Roll number will be derived from your college email (roll@${ORG_DOMAIN})`
-                    : "Your institutional or personal email"
-                }
-                disabled={isSubmitting}
-                error={errors.email?.message}
-                registration={register("email")}
-              />
-
-              {role === "Student" ? (
-                <InputField
-                  id="roll"
-                  label="Roll number"
-                  placeholder="Derived from your email"
-                  disabled
-                  hint="Auto-filled from the part before @ in your college email"
-                  error={errors.roll?.message}
-                  registration={register("roll")}
-                  rightSlot={null}
-                />
-              ) : (
-                <InputField
-                  id="roll"
-                  label="Employee ID"
-                  placeholder="e.g. FAC2024"
-                  disabled={isSubmitting}
-                  error={errors.roll?.message}
-                  registration={register("roll")}
-                />
+                  <InputField
+                    id="roll"
+                    label="Employee ID"
+                    placeholder="e.g. FAC2024"
+                    disabled={isSubmitting || !!studentPreview}
+                    error={errors.roll?.message}
+                    registration={register("roll")}
+                  />
+                </>
               )}
 
               <PasswordField
                 id="password" label="Password"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !!studentPreview}
                 error={errors.password?.message}
                 registration={register("password")}
               />
 
               <PasswordField
                 id="confirmPassword" label="Confirm password"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !!studentPreview}
                 error={errors.confirmPassword?.message}
                 registration={register("confirmPassword")}
               />
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !!studentPreview}
                 className="
                   w-full flex items-center justify-center gap-2 mt-2
                   rounded-lg bg-yellow-400 hover:bg-yellow-300
