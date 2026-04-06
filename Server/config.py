@@ -10,4 +10,5 @@ PAPER_XLSX_TEMPLATE_NAME = os.getenv("PAPER_XLSX_TEMPLATE_NAME", "question_paper
 DOCX_TEMPLATE_ANCHOR_TEXT = os.getenv("DOCX_TEMPLATE_ANCHOR_TEXT", "www.smec.ac.in")
 
 SMTP_HOST    = "smtp.gmail.com"
-SMTP_PORT    = 465
+SMTP_PORT    = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").strip().lower() in {"1", "true", "yes", "on"}
