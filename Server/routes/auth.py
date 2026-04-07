@@ -16,6 +16,7 @@ from starlette.status import (
 from models import Register, Login, Role, Session, ApprovalStatus, ForgotPasswordRequest, ResetPasswordRequest, StudentPreviewRequest
 from supa import db
 from utils import hashPassword, verifyPassword, serializer, send_auth_mail_safe, send_password_reset_mail_safe, createSessionToken
+from utils import should_allow_email_send
 from deps import get_current_user
 from config import STUDENT_EMAIL_DOMAIN
 
@@ -128,10 +129,12 @@ async def register(user : Register,background_tasks : BackgroundTasks):
             # print(data[0])
             # print(data[0])
             # print(verifyPassword(user.password,data[0]["password"]))
-            return HTTPException(
+            raise HTTPException(
                 status_code=HTTP_409_CONFLICT,
                 detail="User With Same Email or Roll Number Already Exists"
             )
+        if not should_allow_email_send(user.email, window_seconds=180):
+            return {"msg": "Verification link already sent recently. Please wait 3 minutes."}
         background_tasks.add_task(send_auth_mail_safe, user)
         return {"msg" : "check your email for a verification link"}
     except HTTPException as e:
@@ -255,7 +258,7 @@ async def forgotPassword(payload: ForgotPasswordRequest, background_tasks: Backg
     email = payload.email.strip().lower()
 
     user_res = await db.client.table("Users").select("id").eq("email", email).limit(1).execute()
-    if user_res.data:
+    if user_res.data and should_allow_email_send(email, window_seconds=180):
         background_tasks.add_task(send_password_reset_mail_safe, email)
 
     # Always return the same message to avoid user enumeration.
@@ -303,6 +306,7 @@ async def listApprovedFaculty(user=Depends(get_current_user)):
         .order("created_at", desc=True) \
         .execute()
     return {"faculty": response.data}
+
 
 
 @router.post("/hod/approve-faculty/{user_id}")

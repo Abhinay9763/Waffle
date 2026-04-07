@@ -9,3 +9,4 @@ httpx
 openpyxl
 google-api-python-client
 google-auth
+locust

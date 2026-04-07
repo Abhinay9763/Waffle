@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -6,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from starlette.status import HTTP_201_CREATED, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT
 import httpx
 from io import BytesIO
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from deps import get_current_user
 from models import QuestionPaper
@@ -87,12 +89,62 @@ def _parse_import_workbook(raw: bytes):
     q_id = 1
     validation_errors: list[str] = []
 
+    def _first_header_index(*names: str):
+        for name in names:
+            idx = header_map.get(name)
+            if idx is not None:
+                return idx
+        return None
+
+    image_columns = {
+        "question": _first_header_index("question_image_url", "question_image_urls", "question_image", "image_url", "image_urls"),
+        "option_a": _first_header_index("option_a_image_url", "option_a_image_urls", "option_a_image"),
+        "option_b": _first_header_index("option_b_image_url", "option_b_image_urls", "option_b_image"),
+        "option_c": _first_header_index("option_c_image_url", "option_c_image_urls", "option_c_image"),
+        "option_d": _first_header_index("option_d_image_url", "option_d_image_urls", "option_d_image"),
+    }
+    image_urls_col = _first_header_index("image_urls")
+
+    def _cell_str(row, col_idx):
+        if col_idx is None or col_idx >= len(row):
+            return ""
+        val = row[col_idx]
+        return "" if val is None else str(val).strip()
+
+    def _image_map_from_row(row) -> dict[str, str]:
+        result: dict[str, str] = {}
+
+        if image_urls_col is not None and image_urls_col < len(row):
+            raw = row[image_urls_col]
+            if isinstance(raw, str) and raw.strip():
+                payload = raw.strip()
+                # Supports export variants where image_urls is a JSON object.
+                if payload.startswith("{") and payload.endswith("}"):
+                    try:
+                        parsed = json.loads(payload)
+                        if isinstance(parsed, dict):
+                            for key in ("question", "option_a", "option_b", "option_c", "option_d"):
+                                value = parsed.get(key)
+                                if value:
+                                    result[key] = str(value).strip()
+                    except Exception:
+                        pass
+
+        for key in ("question", "option_a", "option_b", "option_c", "option_d"):
+            col_val = _cell_str(row, image_columns[key])
+            if col_val:
+                result[key] = col_val
+
+        return result
+
     last_section_name = ""
     for idx, r in enumerate(rows[1:], start=2):
+        row_image_map = _image_map_from_row(r)
         section_name = str(r[header_map["section"]]).strip() if header_map["section"] < len(r) and r[header_map["section"]] is not None else ""
-        question_text = str(r[header_map["question"]]).strip() if header_map["question"] < len(r) and r[header_map["question"]] is not None else ""
+        question_text = _cell_str(r, header_map["question"])
+        question_image_url = row_image_map.get("question", "")
 
-        if not section_name and not question_text:
+        if not section_name and not question_text and not question_image_url:
             continue
 
         # Allow faculty to leave repeated section cells blank; carry forward previous value.
@@ -104,8 +156,8 @@ def _parse_import_workbook(raw: bytes):
         if not section_name:
             validation_errors.append(f"Row {idx}: section is required for the first row of a section block.")
             continue
-        if not question_text:
-            validation_errors.append(f"Row {idx}: question is required.")
+        if not question_text and not question_image_url:
+            validation_errors.append(f"Row {idx}: question text or question_image_url is required.")
             continue
 
         options = []
@@ -113,10 +165,14 @@ def _parse_import_workbook(raw: bytes):
         for key in ("option_a", "option_b", "option_c", "option_d"):
             value = r[header_map[key]] if header_map[key] < len(r) else None
             text = "" if value is None else str(value).strip()
-            if not text:
-                validation_errors.append(f"Row {idx}: {key} is required.")
+            image_url = row_image_map.get(key, "")
+            if not text and not image_url:
+                validation_errors.append(f"Row {idx}: {key} text or {key}_image_url is required.")
                 row_has_option_error = True
-            options.append(text)
+            if image_url:
+                options.append({"text": text, "image_url": image_url})
+            else:
+                options.append(text)
         if row_has_option_error:
             continue
 
@@ -143,14 +199,18 @@ def _parse_import_workbook(raw: bytes):
                 "questions": [],
             }
 
-        sections_by_name[section_name]["questions"].append({
+        question_payload = {
             "question_id": q_id,
             "text": question_text,
             "options": options,
             "correct_option": correct_idx,
             "marks": marks,
             "negative_marks": negative_marks,
-        })
+        }
+        if question_image_url:
+            question_payload["image_url"] = question_image_url
+
+        sections_by_name[section_name]["questions"].append(question_payload)
         answers[q_id] = correct_idx
         q_id += 1
 
@@ -206,6 +266,126 @@ def collect_image_urls(questions_dict: dict) -> set[str]:
                 if isinstance(opt, dict) and opt.get("image_url"):
                     urls.add(opt["image_url"])
     return urls
+
+
+def _storage_key_from_image_url(url: str) -> str | None:
+    value = (url or "").strip()
+    if not value:
+        return None
+
+    marker = "/question-images/"
+    if marker in value:
+        tail = value.split(marker, 1)[1]
+        key = unquote(tail.split("?", 1)[0].split("#", 1)[0]).strip("/")
+        return key or None
+
+    # Allow direct key values as a fallback.
+    parsed = urlsplit(value)
+    if not parsed.scheme and not parsed.netloc and "/" not in value:
+        return value
+    return None
+
+
+def collect_image_keys(questions_dict: dict) -> set[str]:
+    keys: set[str] = set()
+    for image_url in collect_image_urls(questions_dict):
+        key = _storage_key_from_image_url(image_url)
+        if key:
+            keys.add(key)
+    return keys
+
+
+async def _delete_orphaned_storage_keys(candidate_keys: set[str]) -> None:
+    if not candidate_keys:
+        return
+
+    papers_res = await db.client.table("QuestionPapers").select("questions").execute()
+    referenced: set[str] = set()
+    for row in papers_res.data or []:
+        referenced.update(collect_image_keys(row.get("questions") or {}))
+
+    orphaned = sorted(candidate_keys - referenced)
+    if not orphaned:
+        return
+
+    try:
+        await db.client.storage.from_("question-images").remove(orphaned)
+    except Exception:
+        # Best-effort cleanup: DB mutation has already succeeded.
+        pass
+
+
+def _extract_option_text_and_image(opt) -> tuple[str, str]:
+    if isinstance(opt, dict):
+        return str(opt.get("text", "") or ""), str(opt.get("image_url", "") or "")
+    return str(opt or ""), ""
+
+
+def _build_export_workbook(questions_data: dict) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Questions"
+
+    headers = [
+        "exam_name",
+        "section",
+        "question",
+        "question_image_url",
+        "option_a",
+        "option_a_image_url",
+        "option_b",
+        "option_b_image_url",
+        "option_c",
+        "option_c_image_url",
+        "option_d",
+        "option_d_image_url",
+        "correct_option",
+        "marks",
+        "negative_marks",
+    ]
+    ws.append(headers)
+
+    meta = questions_data.get("meta", {}) if isinstance(questions_data, dict) else {}
+    exam_name = str(meta.get("exam_name", "") or "")
+    sections = questions_data.get("sections", []) if isinstance(questions_data, dict) else []
+
+    for section in sections:
+        section_name = str(section.get("name", "") or "")
+        for q in section.get("questions", []):
+            options = q.get("options", [])
+            option_vals = []
+            for idx in range(4):
+                opt = options[idx] if idx < len(options) else ""
+                option_vals.append(_extract_option_text_and_image(opt))
+
+            correct_idx = q.get("correct_option")
+            try:
+                correct_letter = ["A", "B", "C", "D"][int(correct_idx)]
+            except Exception:
+                correct_letter = ""
+
+            ws.append([
+                exam_name,
+                section_name,
+                str(q.get("text", "") or ""),
+                str(q.get("image_url", "") or ""),
+                option_vals[0][0],
+                option_vals[0][1],
+                option_vals[1][0],
+                option_vals[1][1],
+                option_vals[2][0],
+                option_vals[2][1],
+                option_vals[3][0],
+                option_vals[3][1],
+                correct_letter,
+                q.get("marks", 0),
+                q.get("negative_marks", 0),
+            ])
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
 
 
 @router.post("/paper/create", status_code=HTTP_201_CREATED)
@@ -332,19 +512,14 @@ async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_curr
     if exam_res.data:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Paper is in use by an exam.")
 
-    # Delete images that were removed in this update
-    old_urls = collect_image_urls(existing.data[0].get("questions") or {})
-    new_urls = collect_image_urls(paper.questions)
-    orphaned = old_urls - new_urls
-    if orphaned:
-        keys = [url.split("/question-images/", 1)[-1] for url in orphaned]
-        try:
-            await db.client.storage.from_("question-images").remove(keys)
-        except Exception:
-            pass  # tf should i do
+    # Cleanup only keys no longer referenced by any paper after update.
+    old_keys = collect_image_keys(existing.data[0].get("questions") or {})
+    new_keys = collect_image_keys(paper.questions)
+    removed_keys = old_keys - new_keys
 
     data = paper.model_dump(exclude={"id", "creator_id"})
     await db.client.table("QuestionPapers").update(data).eq("id", paper_id).execute()
+    await _delete_orphaned_storage_keys(removed_keys)
     return {"msg": "Paper updated"}
 
 
@@ -359,16 +534,10 @@ async def deletePaper(paper_id: int, user=Depends(get_current_user)):
     if exam_res.data:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Paper is in use by an exam and cannot be deleted.")
 
-    # Delete all images belonging to this paper
-    image_urls = collect_image_urls(existing.data[0].get("questions") or {})
-    if image_urls:
-        keys = [url.split("/question-images/", 1)[-1] for url in image_urls]
-        try:
-            await db.client.storage.from_("question-images").remove(keys)
-        except Exception:
-            pass  # just catch and pass. wtf am i supposed to do here
+    image_keys = collect_image_keys(existing.data[0].get("questions") or {})
 
     await db.client.table("QuestionPapers").delete().eq("id", paper_id).execute()
+    await _delete_orphaned_storage_keys(image_keys)
     return {"msg": "Paper deleted"}
 
 #
@@ -552,4 +721,29 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
         iter([output.getvalue()]),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f"attachment; filename={paper_name}.docx"}
+    )
+
+
+@router.get("/paper/{paper_id:int}/download-xlsx")
+async def downloadPaperXlsx(paper_id: int, user=Depends(get_current_user)):
+    query = db.client.table("QuestionPapers") \
+        .select("id,questions") \
+        .eq("id", paper_id)
+    if user.get("role") != "HOD":
+        query = query.eq("creator_id", user["id"])
+    paper_res = await query.execute()
+
+    if not paper_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
+
+    paper_data = paper_res.data[0]
+    questions_data = paper_data.get("questions") or {}
+    meta = questions_data.get("meta", {}) if isinstance(questions_data, dict) else {}
+    paper_name = str(meta.get("exam_name") or f"Paper #{paper_id}")
+
+    xlsx_bytes = _build_export_workbook(questions_data)
+    return StreamingResponse(
+        iter([xlsx_bytes]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={paper_name}.xlsx"},
     )

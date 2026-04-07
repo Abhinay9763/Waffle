@@ -3,6 +3,8 @@ import smtplib
 import uuid
 import logging
 import base64
+from time import monotonic
+from threading import Lock
 from email.message import EmailMessage
 from functools import lru_cache
 
@@ -36,6 +38,31 @@ mail_pass = os.getenv("gmail_pass")
 
 serializer = URLSafeTimedSerializer(secret_key)
 logger = logging.getLogger(__name__)
+
+EMAIL_SEND_WINDOW_SECONDS = 180
+_email_send_cache: dict[str, float] = {}
+_email_send_cache_lock = Lock()
+
+
+def should_allow_email_send(email: str, window_seconds: int = EMAIL_SEND_WINDOW_SECONDS) -> bool:
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        return False
+
+    now = monotonic()
+    expiry = now + max(1, int(window_seconds))
+
+    with _email_send_cache_lock:
+        expired_keys = [k for k, v in _email_send_cache.items() if v <= now]
+        for key in expired_keys:
+            _email_send_cache.pop(key, None)
+
+        existing_expiry = _email_send_cache.get(normalized_email)
+        if existing_expiry and existing_expiry > now:
+            return False
+
+        _email_send_cache[normalized_email] = expiry
+        return True
 
 
 def _can_use_gmail_api() -> bool:
@@ -108,7 +135,7 @@ def _button_html(link: str, label: str) -> str:
         )
 
 
-def _mail_shell(title: str, subtitle: str, cta_html: str, note: str) -> str:
+def _mail_shell(title: str, subtitle: str, cta_html: str, note: str, fallback_url: str) -> str:
     logo_block = (
         f"<img src=\"{APP_LOGO_URL}\" alt=\"{APP_NAME} logo\" "
         "style=\"display:block;height:44px;max-width:220px;object-fit:contain;margin:0 0 10px 0;\"/>"
@@ -147,7 +174,7 @@ def _mail_shell(title: str, subtitle: str, cta_html: str, note: str) -> str:
                             <td style=\"padding:18px 24px 24px 24px;\">
                                 <p style=\"margin:0;font-size:11px;line-height:1.7;color:#71717a;\">
                                     If the button does not work, copy and paste this URL in your browser:<br/>
-                                    <span style=\"word-break:break-all;color:#a1a1aa;\">{FRONTEND_URL}</span>
+                                    <span style=\"word-break:break-all;color:#a1a1aa;\">{fallback_url}</span>
                                 </p>
                             </td>
                         </tr>
@@ -176,7 +203,8 @@ def send_auth_mail(user : Register):
         subtitle="Welcome aboard. Confirm your email to activate your account and continue.",
         cta_html=_button_html(link, "Verify account"),
         note="This verification link expires in 10 minutes.",
-    ).replace(FRONTEND_URL, link)
+        fallback_url=link,
+    )
     _send_mail(user.email, subject, text, html)
 
 
@@ -202,7 +230,8 @@ def send_password_reset_mail(email: str):
         subtitle="A password reset was requested for your account. Use the button below to continue.",
         cta_html=_button_html(link, "Reset password"),
         note="This reset link expires in 15 minutes. If you did not request this, you can ignore this email.",
-    ).replace(FRONTEND_URL, link)
+        fallback_url=link,
+    )
     _send_mail(email, subject, text, html)
 
 

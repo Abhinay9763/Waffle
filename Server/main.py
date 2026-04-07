@@ -1,5 +1,10 @@
 import contextlib
+import os
 import smtplib
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+from functools import lru_cache
 from fastapi import FastAPI,background
 from postgrest import APIError
 from starlette.background import BackgroundTasks
@@ -11,7 +16,7 @@ from tenacity import retry
 from models import Register
 from supa import db
 from utils import hashPassword, verifyPassword, serializer, send_auth_mail
-from config import FRONTEND_URL
+from config import FRONTEND_URL, APP_NAME
 from routes.exam import router as examRouter
 from routes.auth import router as authRouter
 from routes.paper import router as paperRouter
@@ -26,6 +31,7 @@ async def apiStart(a : FastAPI):
     # await db.disconnect()
 
 app = FastAPI(lifespan=apiStart)
+APP_STARTED_AT = datetime.now(timezone.utc)
 
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
@@ -41,9 +47,44 @@ app.include_router(authRouter)
 app.include_router(paperRouter)
 app.include_router(responseRouter)
 
+
+@lru_cache(maxsize=1)
+def _resolve_commit_sha() -> str:
+    env_commit = (
+        os.getenv("GIT_COMMIT_SHA")
+        or os.getenv("RENDER_GIT_COMMIT")
+        or os.getenv("VERCEL_GIT_COMMIT_SHA")
+        or os.getenv("COMMIT_SHA")
+        or ""
+    ).strip()
+    if env_commit:
+        return env_commit
+
+    repo_root = Path(__file__).resolve().parents[1]
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        return "unknown"
+
 @app.get("/health-check")
 async def home():
-    return {"status" : "ok"}
+    now = datetime.now(timezone.utc)
+    return {
+        "status": "ok",
+        "service": APP_NAME,
+        "commit_sha": _resolve_commit_sha(),
+        "timestamp_utc": now.isoformat(),
+        "uptime_seconds": int((now - APP_STARTED_AT).total_seconds()),
+        "checks": {
+            "supabase_client_initialized": db.client is not None,
+            "cors_frontend_url": FRONTEND_URL,
+        },
+    }
 #
 # @app.post("/user/register",status_code=HTTP_202_ACCEPTED)
 # async def register(user : Register,background_tasks : BackgroundTasks):
