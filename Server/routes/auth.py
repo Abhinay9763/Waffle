@@ -15,7 +15,7 @@ from starlette.status import (
 
 from models import Register, Login, Role, Session, ApprovalStatus, ForgotPasswordRequest, ResetPasswordRequest, StudentPreviewRequest
 from supa import db
-from utils import hashPassword, verifyPassword, serializer, send_auth_mail, send_password_reset_mail, createSessionToken
+from utils import hashPassword, verifyPassword, serializer, send_auth_mail_safe, send_password_reset_mail_safe, createSessionToken
 from deps import get_current_user
 from config import STUDENT_EMAIL_DOMAIN
 
@@ -132,7 +132,7 @@ async def register(user : Register,background_tasks : BackgroundTasks):
                 status_code=HTTP_409_CONFLICT,
                 detail="User With Same Email or Roll Number Already Exists"
             )
-        background_tasks.add_task(send_auth_mail,user)
+        background_tasks.add_task(send_auth_mail_safe, user)
         return {"msg" : "check your email for a verification link"}
     except HTTPException as e:
         raise e
@@ -256,7 +256,7 @@ async def forgotPassword(payload: ForgotPasswordRequest, background_tasks: Backg
 
     user_res = await db.client.table("Users").select("id").eq("email", email).limit(1).execute()
     if user_res.data:
-        background_tasks.add_task(send_password_reset_mail, email)
+        background_tasks.add_task(send_password_reset_mail_safe, email)
 
     # Always return the same message to avoid user enumeration.
     return {"msg": "If that email exists, a password reset link has been sent."}

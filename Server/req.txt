@@ -7,3 +7,5 @@ itsdangerous
 python-docx
 httpx
 openpyxl
+google-api-python-client
+google-auth
