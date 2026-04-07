@@ -1,16 +1,26 @@
 from datetime import datetime, timezone
+import logging
 
 from fastapi import Header, HTTPException
-from starlette.status import HTTP_401_UNAUTHORIZED
+from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_503_SERVICE_UNAVAILABLE
 
 from supa import db
 
+logger = logging.getLogger(__name__)
+
 
 async def get_current_user(x_session_token: str = Header()):
-    response = await db.client.table("Sessions") \
-        .select("expiry,Users(id,name,roll,role,approval_status)") \
-        .eq("token", x_session_token) \
-        .execute()
+    try:
+        response = await db.client.table("Sessions") \
+            .select("expiry,Users(id,name,roll,role,approval_status)") \
+            .eq("token", x_session_token) \
+            .execute()
+    except Exception:
+        logger.exception("Session lookup failed")
+        raise HTTPException(
+            status_code=HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication backend unavailable. Please retry.",
+        )
 
     if not response.data:
         raise HTTPException(

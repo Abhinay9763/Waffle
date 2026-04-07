@@ -23,11 +23,28 @@ TARGET_HOST = os.getenv("TARGET_HOST", "").strip()
 HEARTBEAT_SECONDS = max(1, int(os.getenv("HEARTBEAT_SECONDS", "30")))
 FULL_SNAPSHOT_EVERY = max(1, int(os.getenv("FULL_SNAPSHOT_EVERY", "3")))
 SUBMIT_AFTER_HEARTBEATS = max(1, int(os.getenv("SUBMIT_AFTER_HEARTBEATS", "8")))
+REQUEST_TIMEOUT_SECONDS = max(1.0, float(os.getenv("REQUEST_TIMEOUT_SECONDS", "20")))
+
+
+def _resolve_users_csv(path: str) -> Path:
+    candidate = Path(path)
+    if candidate.is_absolute():
+        return candidate
+
+    # First: relative to current working directory
+    cwd_path = Path.cwd() / candidate
+    if cwd_path.exists():
+        return cwd_path
+
+    # Fallback: relative to repo root (parent of Server/loadtest)
+    repo_root = LOADTEST_DIR.parent.parent
+    return repo_root / candidate
 
 
 def _load_users(path: str) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    with open(path, "r", encoding="utf-8") as f:
+    resolved = _resolve_users_csv(path)
+    with resolved.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             email = (row.get("email") or "").strip()
@@ -43,7 +60,8 @@ def _on_test_start(environment, **kwargs):
     global _USERS
     _USERS = _load_users(USERS_CSV)
     if not _USERS:
-        raise RuntimeError(f"No credentials found in {USERS_CSV}. Add email,password rows.")
+        resolved = _resolve_users_csv(USERS_CSV)
+        raise RuntimeError(f"No credentials found in {resolved}. Add email,password rows.")
 
 
 class ExamUser(HttpUser):
@@ -53,7 +71,7 @@ class ExamUser(HttpUser):
     token: str
     email: str
     password: str
-    exam_id: int
+    exam_id: int | None
     user_index: int
     submitted: bool
     heartbeat_count: int
@@ -69,6 +87,8 @@ class ExamUser(HttpUser):
 
     def _pick_user(self) -> dict[str, str]:
         global _USER_CURSOR
+        if not _USERS:
+            raise StopUser("No load-test users available. Check USERS_CSV path and file content.")
         with _USERS_LOCK:
             idx = _USER_CURSOR % len(_USERS)
             _USER_CURSOR += 1
@@ -81,6 +101,7 @@ class ExamUser(HttpUser):
             json={"email": self.email, "password": self.password},
             name="POST /user/login",
             catch_response=True,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         ) as res:
             if not res.ok:
                 res.failure(f"login failed: {res.status_code} {res.text[:120]}")
@@ -99,6 +120,7 @@ class ExamUser(HttpUser):
             headers={"x-session-token": self.token},
             name="GET /user/session",
             catch_response=True,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         ) as res:
             if not res.ok:
                 res.failure(f"session failed: {res.status_code}")
@@ -114,6 +136,7 @@ class ExamUser(HttpUser):
             headers={"x-session-token": self.token},
             name="GET /exam/available",
             catch_response=True,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         ) as res:
             if not res.ok:
                 res.failure(f"available exams failed: {res.status_code}")
@@ -132,6 +155,7 @@ class ExamUser(HttpUser):
             headers={"x-session-token": self.token},
             name="GET /exam/{id}/take",
             catch_response=True,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         ) as res:
             if not res.ok:
                 res.failure(f"take exam failed: {res.status_code} {res.text[:140]}")
@@ -175,6 +199,12 @@ class ExamUser(HttpUser):
     def _submit(self) -> None:
         if self.submitted:
             return
+        if not self.token:
+            return
+        if self.exam_id is None:
+            return
+        if not self.responses:
+            return
         payload = {
             "exam_id": self.exam_id,
             "response": {
@@ -188,6 +218,7 @@ class ExamUser(HttpUser):
             json=payload,
             name="POST /response/submit",
             catch_response=True,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         ) as res:
             if not res.ok:
                 res.failure(f"submit failed: {res.status_code} {res.text[:120]}")
@@ -201,6 +232,7 @@ class ExamUser(HttpUser):
         self.password = picked["password"]
 
         self.token = ""
+        self.exam_id = None
         self.submitted = False
         self.heartbeat_count = 0
         self.last_heartbeat_at = 0.0
@@ -243,6 +275,7 @@ class ExamUser(HttpUser):
             json=body,
             name="POST /response/heartbeat",
             catch_response=True,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         ) as res:
             if res.ok:
                 self.last_heartbeat_at = now
