@@ -150,7 +150,8 @@ function PasswordField({
 
 // ── Success state ─────────────────────────────────────────────────────────────
 
-function SuccessState({ email }: { email: string }) {
+function SuccessState({ email, message }: { email: string; message?: string }) {
+  const displayMessage = message?.trim() || "We sent a verification link to your email.";
   return (
     <div className="w-full max-w-sm space-y-8">
       <div className="flex items-center gap-2.5 text-yellow-400 lg:hidden">
@@ -167,10 +168,9 @@ function SuccessState({ email }: { email: string }) {
         <div className="space-y-1.5">
           <h2 className="text-lg font-semibold text-zinc-100">Check your email</h2>
           <p className="text-sm text-zinc-500 leading-relaxed">
-            We sent a verification link to{" "}
-            <span className="text-zinc-300 font-medium">{email}</span>.
+            <span className="text-zinc-300 font-medium">{email}</span>
             <br />
-            The link expires in 10 minutes.
+            {displayMessage}
           </p>
         </div>
         <p className="text-xs text-zinc-500">Didn&apos;t receive it? Check your spam folder.</p>
@@ -202,6 +202,7 @@ export default function RegisterForm() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState("");
+  const [submittedMessage, setSubmittedMessage] = useState("");
   const [studentPreview, setStudentPreview] = useState<StudentPreview | null>(null);
   const [pendingData, setPendingData] = useState<FormData | null>(null);
 
@@ -247,7 +248,16 @@ export default function RegisterForm() {
       setServerError(err.detail ?? "Registration failed. Please try again.");
       return;
     }
+    const body = await res.json().catch(() => ({}));
+    const msg = typeof body?.msg === "string" ? body.msg : "";
+
+    if (msg.toLowerCase().includes("already sent recently")) {
+      setServerError(msg);
+      return;
+    }
+
     setSubmittedEmail(data.email);
+    setSubmittedMessage(msg || "Check your inbox for your verification link. The link expires in 10 minutes.");
     setSubmitted(true);
   };
 
@@ -347,7 +357,7 @@ export default function RegisterForm() {
       <div className="flex flex-1 items-center justify-center px-6 py-12">
 
         {submitted ? (
-          <SuccessState email={submittedEmail} />
+          <SuccessState email={submittedEmail} message={submittedMessage} />
         ) : (
           <div className="w-full max-w-sm space-y-7">
 

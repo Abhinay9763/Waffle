@@ -34,10 +34,30 @@ async function downloadDoc(paperId: number, paperName: string, token: string) {
   }
 }
 
+async function downloadXlsx(paperId: number, paperName: string, token: string) {
+  try {
+    const res = await fetch(`${API}/paper/${paperId}/download-xlsx`, {
+      headers: { "x-session-token": token },
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${paperName}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    throw e;
+  }
+}
+
 export default function PapersPage() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [downloadingDocId, setDownloadingDocId] = useState<number | null>(null);
+  const [downloadingXlsxId, setDownloadingXlsxId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
 
@@ -66,10 +86,18 @@ export default function PapersPage() {
 
   const handleDownload = async (paper: Paper) => {
     const token = getCookie("wfl-session") as string | undefined;
-    if (!token || downloadingId !== null) return;
-    setDownloadingId(paper.id);
+    if (!token || downloadingDocId !== null) return;
+    setDownloadingDocId(paper.id);
     await downloadDoc(paper.id, paper.name, token).catch(() => {});
-    setDownloadingId(null);
+    setDownloadingDocId(null);
+  };
+
+  const handleDownloadXlsx = async (paper: Paper) => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token || downloadingXlsxId !== null) return;
+    setDownloadingXlsxId(paper.id);
+    await downloadXlsx(paper.id, paper.name, token).catch(() => {});
+    setDownloadingXlsxId(null);
   };
 
   const handleDelete = async (paper: Paper) => {
@@ -277,13 +305,23 @@ export default function PapersPage() {
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => handleDownload(paper)}
-                  disabled={downloadingId !== null}
+                  disabled={downloadingDocId !== null}
                   className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-blue-400 border border-zinc-700 hover:border-blue-700 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {downloadingId === paper.id
+                  {downloadingDocId === paper.id
                     ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     : <FileDown className="w-3.5 h-3.5" />}
-                  {downloadingId === paper.id ? "Generating…" : ".docx"}
+                  {downloadingDocId === paper.id ? "Generating…" : ".docx"}
+                </button>
+                <button
+                  onClick={() => handleDownloadXlsx(paper)}
+                  disabled={downloadingXlsxId !== null}
+                  className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-emerald-400 border border-zinc-700 hover:border-emerald-700 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {downloadingXlsxId === paper.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <FileDown className="w-3.5 h-3.5" />}
+                  {downloadingXlsxId === paper.id ? "Generating…" : ".xlsx"}
                 </button>
                 <Link
                   href={`/papers/${paper.id}`}
