@@ -74,6 +74,10 @@ def _resolve_commit_sha() -> str:
     except Exception:
         return "unknown"
 
+@app.get("/")
+async def root():
+    return {"Nothin imp"}
+
 @app.get("/health-check")
 async def home():
     now = datetime.now(timezone.utc)
