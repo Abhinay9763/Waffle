@@ -20,6 +20,7 @@ _batch_stop_event: asyncio.Event | None = None
 _batch_task: asyncio.Task | None = None
 
 ALLOWED_POLICY_EVENTS = {
+    "normal_mode_selected",
     "focus_lost",
     "tab_hidden",
     "fullscreen_exit",

@@ -65,6 +65,7 @@ function timeLeft(endIso: string) {
 
 const EVENT_META: Record<string, { label: string; dot: string; text: string }> = {
   joined:                 { label: "joined exam",                          dot: "bg-emerald-500", text: "text-emerald-400" },
+  normal_mode_selected:   { label: "normal mode selected",                 dot: "bg-sky-700",     text: "text-sky-300"     },
   submitted:              { label: "submitted exam",                       dot: "bg-yellow-400",  text: "text-yellow-400"  },
   retake_granted:         { label: "retake granted",                       dot: "bg-purple-400",  text: "text-purple-400"  },
   tab_hidden:             { label: "warned: loss of tab focus",            dot: "bg-amber-500",   text: "text-amber-300"   },
@@ -239,6 +240,7 @@ export default function LiveControlCentre() {
       const key = normalizeEventKey(l.event);
       if (key === "blind_mode_enabled") byRoll[roll] = true;
       if (key === "blind_mode_disabled") byRoll[roll] = false;
+      if (key === "normal_mode_selected") byRoll[roll] = false;
     }
     return byRoll;
   }, [logs]);

@@ -86,7 +86,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   useEffect(() => {
     if (normalModeInitLoggedRef.current) return;
     normalModeInitLoggedRef.current = true;
-    eventQueueRef.current.push({ event: "blind_mode_disabled" });
+    eventQueueRef.current.push({ event: "normal_mode_selected" });
   }, []);
 
   const requestExamFullscreen = useCallback(async () => {

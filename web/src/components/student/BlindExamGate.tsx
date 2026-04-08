@@ -2,26 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import BlindExamRunner from "@/components/student/BlindExamRunner";
 import { ExamStructure } from "@/components/student/types";
 
-function navigateBackOrDashboard(router: ReturnType<typeof useRouter>) {
-  if (typeof window === "undefined") {
-    router.replace("/student");
-    return;
-  }
-
-  if (window.history.length > 1) {
-    router.back();
-    return;
-  }
-
-  router.replace("/student");
-}
-
 export default function BlindExamGate({ exam }: { exam: ExamStructure }) {
-  const router = useRouter();
   const [status, setStatus] = useState<"idle" | "requesting" | "denied" | "granted">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -33,8 +17,7 @@ export default function BlindExamGate({ exam }: { exam: ExamStructure }) {
 
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setStatus("denied");
-      setError("Microphone is not available in this browser.");
-      navigateBackOrDashboard(router);
+      setError("Microphone is not available in this browser. Try a modern browser on HTTPS.");
       return;
     }
 
@@ -42,10 +25,10 @@ export default function BlindExamGate({ exam }: { exam: ExamStructure }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
       setStatus("granted");
-    } catch {
+    } catch (err) {
+      const reason = err instanceof Error && err.message ? ` (${err.message})` : "";
       setStatus("denied");
-      setError("Microphone access was denied. Returning you to the previous page.");
-      navigateBackOrDashboard(router);
+      setError(`Microphone access was denied. Please allow access and try again${reason}.`);
     }
   };
 
@@ -71,8 +54,15 @@ export default function BlindExamGate({ exam }: { exam: ExamStructure }) {
             disabled={status === "requesting"}
             className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {status === "requesting" ? "Requesting..." : "Allow microphone and continue"}
+            {status === "requesting" ? "Requesting..." : status === "denied" ? "Retry microphone access" : "Allow microphone and continue"}
           </button>
+
+          <Link
+            href={`/exam/${exam.meta.exam_id}/normal`}
+            className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500"
+          >
+            Continue in normal mode
+          </Link>
 
           <Link
             href="/student"
