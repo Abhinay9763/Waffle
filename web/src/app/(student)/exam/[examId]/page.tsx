@@ -39,6 +39,17 @@ export default async function StudentExamPage({
           </Link>
         </div>
 
+        <div className="mt-6 rounded-xl border border-red-900/50 bg-red-950/20 p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-red-300/90">Exam Policy</p>
+          <ul className="mt-3 space-y-2 text-xs text-zinc-300">
+            <li>Do not switch tabs or leave the exam window during the test.</li>
+            <li>Do not exit fullscreen mode once the exam starts.</li>
+            <li>Copy/paste, screenshots, and suspicious activity may be logged as policy events.</li>
+            <li>Repeated violations increase warnings and can lead to automatic submission.</li>
+            <li>If auto-submitted due to policy limits, you cannot continue the same attempt.</li>
+          </ul>
+        </div>
+
         <Link href="/student" className="mt-8 inline-block text-xs text-yellow-400 hover:text-yellow-300">
           Back to dashboard
         </Link>

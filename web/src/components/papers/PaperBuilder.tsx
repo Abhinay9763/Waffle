@@ -719,8 +719,14 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
   const [state, dispatch] = useReducer(reducer, initialData, buildInitialState);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [autosavePaperId, setAutosavePaperId] = useState<number | null>(paperId ?? null);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [autosaveAt, setAutosaveAt] = useState<string | null>(null);
   const [cloning, setCloning] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveInFlightRef = useRef(false);
+  const lastAutosaveFingerprintRef = useRef("");
 
   // ── Speech-to-text ──────────────────────────────────────────────────────
   const [sttActive, setSttActive] = useState(false);
@@ -853,6 +859,81 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
     return { questions, answers };
   };
 
+  const hasMeaningfulContent = () => {
+    if (state.examName.trim()) return true;
+    for (const q of flat) {
+      if (q.text.trim() || q.image_url) return true;
+      for (const opt of q.options) {
+        if ((opt.text ?? "").trim() || opt.image_url) return true;
+      }
+    }
+    return false;
+  };
+
+  const persistDraft = async (fingerprint: string) => {
+    if (inUse || autosaveInFlightRef.current) return;
+    if (!hasMeaningfulContent()) return;
+
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) return;
+
+    const payload = { ...buildPayload(), creator_id: 0 };
+    const effectivePaperId = paperId ?? autosavePaperId;
+    autosaveInFlightRef.current = true;
+    setAutosaveStatus("saving");
+
+    const res = await fetch(
+      effectivePaperId !== null ? `${API}/paper/${effectivePaperId}` : `${API}/paper/create`,
+      {
+        method: effectivePaperId !== null ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json", "x-session-token": token },
+        body: JSON.stringify(payload),
+      }
+    ).catch(() => null);
+
+    autosaveInFlightRef.current = false;
+
+    if (!res || !res.ok) {
+      setAutosaveStatus("error");
+      return;
+    }
+
+    if (effectivePaperId === null) {
+      const body = await res.json().catch(() => ({}));
+      if (typeof body?.id === "number") {
+        setAutosavePaperId(body.id);
+      }
+    }
+
+    lastAutosaveFingerprintRef.current = fingerprint;
+    setAutosaveStatus("saved");
+    setAutosaveAt(new Date().toLocaleTimeString());
+  };
+
+  useEffect(() => {
+    if (inUse) return;
+
+    const fingerprint = JSON.stringify(buildPayload());
+    if (!lastAutosaveFingerprintRef.current) {
+      lastAutosaveFingerprintRef.current = fingerprint;
+      return;
+    }
+    if (fingerprint === lastAutosaveFingerprintRef.current) return;
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void persistDraft(fingerprint);
+    }, 3000);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+    // We intentionally depend on state so autosave reacts to any draft edit.
+  }, [state, inUse, paperId, autosavePaperId]);
+
   const handleSave = async () => {
     setSaveError(null);
     if (!state.examName.trim()) { setSaveError("Please enter a paper name."); return; }
@@ -862,9 +943,10 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
     const token = getCookie("wfl-session") as string | undefined;
     setSaving(true);
 
-    const isEdit = paperId !== undefined;
+    const effectivePaperId = paperId ?? autosavePaperId;
+    const isEdit = effectivePaperId !== null;
     const res = await fetch(
-      isEdit ? `${API}/paper/${paperId}` : `${API}/paper/create`,
+      isEdit ? `${API}/paper/${effectivePaperId}` : `${API}/paper/create`,
       {
         method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json", "x-session-token": token ?? "" },
@@ -927,6 +1009,14 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
           <span className="text-xs text-zinc-600 tabular-nums">
             {totalQ}Q · {totalS}S
           </span>
+          {!inUse && (
+            <span className={`text-xs ${autosaveStatus === "error" ? "text-red-400" : "text-zinc-500"}`}>
+              {autosaveStatus === "saving" && "Autosaving..."}
+              {autosaveStatus === "saved" && `Saved${autosaveAt ? ` at ${autosaveAt}` : ""}`}
+              {autosaveStatus === "error" && "Autosave failed"}
+              {autosaveStatus === "idle" && "Autosave on"}
+            </span>
+          )}
           {saveError && (
             <span className="text-xs text-red-400">{saveError}</span>
           )}

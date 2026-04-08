@@ -11,7 +11,7 @@ import QuestionPalette from "@/components/student/QuestionPalette";
 import QuestionView from "@/components/student/QuestionView";
 import PolicyOverlay from "@/components/student/PolicyOverlay";
 import { ExamStructure, QuestionResponse } from "@/components/student/types";
-import { API } from "@/lib/config";
+import { API, HEARTBEAT_INTERVAL_MS } from "@/lib/config";
 
 export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const router = useRouter();
@@ -198,6 +198,10 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       payload.response_delta = deltaEntries;
     }
 
+    if (!shouldSendFullSnapshot && eventsToSend.length === 0 && deltaEntries.length === 0) {
+      return;
+    }
+
     heartbeatInFlightRef.current = true;
 
     setAutosaveState("saving");
@@ -314,7 +318,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     }, 1500);
     const id = setInterval(() => {
       void sendHeartbeat();
-    }, 30000);
+    }, HEARTBEAT_INTERVAL_MS);
 
     return () => {
       clearTimeout(warmup);
