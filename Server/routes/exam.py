@@ -17,7 +17,9 @@ router = APIRouter()
 
 EXAM_CACHE_TTL_SECONDS = 120
 PAPER_CACHE_TTL_SECONDS = 600
+EXAM_AVAILABLE_CACHE_TTL_SECONDS = 20
 SECTION_MAPPING_PATH = Path(__file__).resolve().parents[1] / "datasets" / "section_mapping.json"
+_exam_available_cache_version = 1
 
 
 @lru_cache(maxsize=1)
@@ -292,7 +294,9 @@ async def _get_paper_full(paper_id: int) -> dict | None:
 
 
 async def _invalidate_exam_cache(exam_id: int) -> None:
+    global _exam_available_cache_version
     await delete_cache(f"exam:core:{exam_id}")
+    _exam_available_cache_version += 1
 
 
 @router.post("/exam/create", status_code=HTTP_201_CREATED)
@@ -353,6 +357,14 @@ async def availableExams(user=Depends(get_current_user)):
     """All exams visible to students — no creator filter."""
     should_filter_by_section = user.get("role") == "Student"
     student_section = _derive_student_section_from_roll(str(user.get("roll", ""))) if should_filter_by_section else None
+    role = str(user.get("role", ""))
+    section_key = student_section or "-"
+    cache_key = f"exam:available:v{_exam_available_cache_version}:role:{role}:section:{section_key}"
+
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return {"exams": cached}
+
     try:
         response = await db.client.table("Exams") \
             .select("id,name,total_marks,start,end,allowed_sections,Users!creator_id(name)") \
@@ -376,6 +388,8 @@ async def availableExams(user=Depends(get_current_user)):
         e["allowed_sections"] = allowed_sections
         e["faculty_name"] = faculty["name"] if faculty else ""
         exams.append(e)
+
+    await set_cache(cache_key, exams, EXAM_AVAILABLE_CACHE_TTL_SECONDS)
     return {"exams": exams}
 
 

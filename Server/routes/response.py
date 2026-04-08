@@ -1,4 +1,6 @@
 from datetime import datetime, timezone, timedelta
+import asyncio
+import os
 
 from fastapi import APIRouter, Depends
 from starlette.status import HTTP_200_OK
@@ -8,6 +10,12 @@ from models import Heartbeat, Submit
 from supa import db
 
 router = APIRouter()
+
+HEARTBEAT_BATCH_WINDOW_SECONDS = max(1, int(os.getenv("HEARTBEAT_BATCH_WINDOW_SECONDS", "2")))
+_pending_heartbeats: dict[tuple[int, int], dict] = {}
+_pending_lock = asyncio.Lock()
+_batch_stop_event: asyncio.Event | None = None
+_batch_task: asyncio.Task | None = None
 
 ALLOWED_POLICY_EVENTS = {
     "focus_lost",
@@ -72,6 +80,149 @@ def _merge_response_delta(base_response: dict, delta: list[dict] | None) -> dict
     return merged
 
 
+def _merge_queued_heartbeat(existing: dict | None, hb: Heartbeat) -> dict:
+    if existing is None:
+        existing = {
+            "response": None,
+            "response_delta": [],
+            "events": [],
+            "last_seen_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    if hb.response is not None:
+        existing["response"] = hb.response
+        existing["response_delta"] = []
+    elif hb.response_delta:
+        existing["response_delta"].extend(hb.response_delta[:200])
+        existing["response_delta"] = existing["response_delta"][-500:]
+
+    if hb.events:
+        existing["events"].extend(hb.events[:30])
+        existing["events"] = existing["events"][-100:]
+
+    existing["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    return existing
+
+
+async def _drain_pending_snapshot() -> dict[tuple[int, int], dict]:
+    async with _pending_lock:
+        if not _pending_heartbeats:
+            return {}
+        snapshot = dict(_pending_heartbeats)
+        _pending_heartbeats.clear()
+        return snapshot
+
+
+async def _pop_single_pending(exam_id: int, user_id: int) -> dict | None:
+    async with _pending_lock:
+        return _pending_heartbeats.pop((exam_id, user_id), None)
+
+
+async def _flush_pending_snapshot(snapshot: dict[tuple[int, int], dict]) -> None:
+    if not snapshot:
+        return
+
+    grouped: dict[int, list[int]] = {}
+    for exam_id, user_id in snapshot.keys():
+        grouped.setdefault(exam_id, []).append(user_id)
+
+    for exam_id, users in grouped.items():
+        unique_users = sorted(set(users))
+        existing_res = await db.client.table("Responses") \
+            .select("id,exam_id,user_id,status,response") \
+            .eq("exam_id", exam_id) \
+            .in_("user_id", unique_users) \
+            .execute()
+        existing_by_user = {int(row["user_id"]): row for row in (existing_res.data or [])}
+
+        rows_to_upsert: list[dict] = []
+        logs_to_insert: list[dict] = []
+        submitted_touches: list[int] = []
+
+        for user_id in unique_users:
+            item = snapshot.get((exam_id, user_id))
+            if not item:
+                continue
+
+            existing_row = existing_by_user.get(user_id)
+            base_response = existing_row.get("response") if existing_row else {"student_roll": "", "responses": []}
+
+            if item.get("response") is not None:
+                next_response = item["response"]
+            elif item.get("response_delta"):
+                next_response = _merge_response_delta(base_response or {"student_roll": "", "responses": []}, item["response_delta"])
+            else:
+                next_response = base_response or {"student_roll": "", "responses": []}
+
+            if existing_row and existing_row.get("status") == "submitted":
+                submitted_touches.append(user_id)
+            else:
+                rows_to_upsert.append({
+                    "exam_id": exam_id,
+                    "user_id": user_id,
+                    "response": next_response,
+                    "status": "in_progress",
+                    "last_seen_at": item.get("last_seen_at") or datetime.now(timezone.utc).isoformat(),
+                })
+                if not existing_row:
+                    logs_to_insert.append({
+                        "exam_id": exam_id,
+                        "user_id": user_id,
+                        "event": "joined",
+                    })
+
+            policy_events = _extract_policy_events(item.get("events"))
+            for ev in policy_events:
+                logs_to_insert.append({
+                    "exam_id": exam_id,
+                    "user_id": user_id,
+                    "event": ev,
+                })
+
+        if rows_to_upsert:
+            await db.client.table("Responses").upsert(rows_to_upsert, on_conflict="exam_id,user_id").execute()
+
+        for user_id in submitted_touches:
+            await db.client.table("Responses") \
+                .update({"last_seen_at": datetime.now(timezone.utc).isoformat()}) \
+                .eq("exam_id", exam_id) \
+                .eq("user_id", user_id) \
+                .execute()
+
+        if logs_to_insert:
+            await db.client.table("ExamLogs").insert(logs_to_insert).execute()
+
+
+async def _heartbeat_batch_worker() -> None:
+    while _batch_stop_event is not None and not _batch_stop_event.is_set():
+        await asyncio.sleep(HEARTBEAT_BATCH_WINDOW_SECONDS)
+        snapshot = await _drain_pending_snapshot()
+        if snapshot:
+            await _flush_pending_snapshot(snapshot)
+
+    snapshot = await _drain_pending_snapshot()
+    if snapshot:
+        await _flush_pending_snapshot(snapshot)
+
+
+async def start_heartbeat_batch_worker() -> None:
+    global _batch_stop_event, _batch_task
+    if _batch_task is not None and not _batch_task.done():
+        return
+    _batch_stop_event = asyncio.Event()
+    _batch_task = asyncio.create_task(_heartbeat_batch_worker())
+
+
+async def stop_heartbeat_batch_worker() -> None:
+    global _batch_stop_event, _batch_task
+    if _batch_stop_event is not None:
+        _batch_stop_event.set()
+    if _batch_task is not None:
+        await _batch_task
+    _batch_task = None
+    _batch_stop_event = None
+
+
 def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
     scope_ids_raw = response.get("grading_scope_question_ids")
     scope_ids: set[int] | None = None
@@ -127,76 +278,20 @@ def _compute_total_marks_for_submission(response: dict, questions_data: dict, fa
 
 @router.post("/response/heartbeat", status_code=HTTP_200_OK)
 async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
-    """Web exam runtime calls this every X seconds to autosave and signal presence."""
-    now = datetime.now(timezone.utc).isoformat()
-
-    # Detect first-ever join for this student+exam and read current status.
-    existing = await db.client.table("Responses") \
-        .select("id,status,response") \
-        .eq("exam_id", hb.exam_id) \
-        .eq("user_id", user["id"]) \
-        .execute()
-
-    existing_row = existing.data[0] if existing.data else None
-    if not existing.data:
-        await db.client.table("ExamLogs").insert({
-            "exam_id": hb.exam_id,
-            "user_id": user["id"],
-            "event":   "joined",
-        }).execute()
-
-    base_response = existing_row.get("response") if existing_row else {"student_roll": "", "responses": []}
-    next_response = None
-    if hb.response is not None:
-        next_response = hb.response
-    elif hb.response_delta:
-        next_response = _merge_response_delta(base_response or {"student_roll": "", "responses": []}, hb.response_delta)
-
-    # Never downgrade submitted -> in_progress due to late heartbeat race.
-    if existing_row and existing_row.get("status") == "submitted":
-        await db.client.table("Responses") \
-            .update({"last_seen_at": now}) \
-            .eq("exam_id", hb.exam_id) \
-            .eq("user_id", user["id"]) \
-            .execute()
-    elif existing_row:
-        payload = {"last_seen_at": now, "status": "in_progress"}
-        if next_response is not None:
-            payload["response"] = next_response
-        await db.client.table("Responses") \
-            .update(payload) \
-            .eq("exam_id", hb.exam_id) \
-            .eq("user_id", user["id"]) \
-            .execute()
-    else:
-        await db.client.table("Responses").upsert(
-            {
-                "exam_id":      hb.exam_id,
-                "user_id":      user["id"],
-                "response":     next_response or {"student_roll": "", "responses": []},
-                "status":       "in_progress",
-                "last_seen_at": now,
-            },
-            on_conflict="exam_id,user_id",
-        ).execute()
-
-    policy_events = _extract_policy_events(hb.events)
-    if policy_events:
-        await db.client.table("ExamLogs").insert([
-            {
-                "exam_id": hb.exam_id,
-                "user_id": user["id"],
-                "event": ev,
-            }
-            for ev in policy_events
-        ]).execute()
-
-    return {"msg": "ok"}
+    """Queue heartbeats and persist in short batches to reduce write pressure."""
+    key = (hb.exam_id, int(user["id"]))
+    async with _pending_lock:
+        _pending_heartbeats[key] = _merge_queued_heartbeat(_pending_heartbeats.get(key), hb)
+    return {"msg": "queued"}
 
 
 @router.post("/response/submit", status_code=HTTP_200_OK)
 async def submitResponse(sub: Submit, user=Depends(get_current_user)):
     """Finalise the exam — called once on submit or when time runs out."""
+    pending = await _pop_single_pending(sub.exam_id, int(user["id"]))
+    if pending:
+        await _flush_pending_snapshot({(sub.exam_id, int(user["id"])): pending})
+
     existing = await db.client.table("Responses") \
         .select("status") \
         .eq("exam_id", sub.exam_id) \

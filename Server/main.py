@@ -21,13 +21,16 @@ from routes.exam import router as examRouter
 from routes.auth import router as authRouter
 from routes.paper import router as paperRouter
 from routes.response import router as responseRouter
+from routes.response import start_heartbeat_batch_worker, stop_heartbeat_batch_worker
 
 @contextlib.asynccontextmanager
 async def apiStart(a : FastAPI):
     # await db.connect()
     await db.connect()
+    await start_heartbeat_batch_worker()
     print(db.client)
     yield
+    await stop_heartbeat_batch_worker()
     # await db.disconnect()
 
 app = FastAPI(lifespan=apiStart)
