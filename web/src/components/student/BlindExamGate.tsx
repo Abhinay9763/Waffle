@@ -9,6 +9,26 @@ export default function BlindExamGate({ exam }: { exam: ExamStructure }) {
   const [status, setStatus] = useState<"idle" | "requesting" | "denied" | "granted">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  const formatMicError = (err: unknown) => {
+    const name = err instanceof DOMException ? err.name : "";
+    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+      return "Microphone permission was blocked by the browser or OS.";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "No microphone device was found.";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return "Microphone is busy in another app.";
+    }
+    if (name === "SecurityError") {
+      return "Microphone access requires a secure context (HTTPS).";
+    }
+    if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+      return "Microphone constraints are not supported on this device.";
+    }
+    return "Could not access microphone.";
+  };
+
   const requestMic = async () => {
     if (status === "requesting" || status === "granted") return;
 
@@ -26,9 +46,23 @@ export default function BlindExamGate({ exam }: { exam: ExamStructure }) {
       stream.getTracks().forEach((track) => track.stop());
       setStatus("granted");
     } catch (err) {
+      // Some browsers can throw from getUserMedia even after permission is granted.
+      // In that case, trust Permission API state and proceed.
+      try {
+        if (navigator.permissions?.query) {
+          const perm = await navigator.permissions.query({ name: "microphone" as PermissionName });
+          if (perm.state === "granted") {
+            setStatus("granted");
+            return;
+          }
+        }
+      } catch {
+        // Ignore permission-query failures and fall back to error message.
+      }
+
       const reason = err instanceof Error && err.message ? ` (${err.message})` : "";
       setStatus("denied");
-      setError(`Microphone access was denied. Please allow access and try again${reason}.`);
+      setError(`${formatMicError(err)} Please allow access and try again${reason}.`);
     }
   };
 
