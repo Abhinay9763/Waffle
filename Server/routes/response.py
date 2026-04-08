@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 import asyncio
 import os
+import logging
 
 from fastapi import APIRouter, Depends
 from starlette.status import HTTP_200_OK
@@ -10,6 +11,7 @@ from models import Heartbeat, Submit
 from supa import db
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 HEARTBEAT_BATCH_WINDOW_SECONDS = max(1, int(os.getenv("HEARTBEAT_BATCH_WINDOW_SECONDS", "2")))
 _pending_heartbeats: dict[tuple[int, int], dict] = {}
@@ -60,7 +62,7 @@ def _merge_response_delta(base_response: dict, delta: list[dict] | None) -> dict
         if isinstance(qid, int):
             idx_by_qid[qid] = i
 
-    for d in delta[:200]:
+    for d in delta:
         if not isinstance(d, dict):
             continue
         qid = d.get("question_id")
@@ -78,6 +80,30 @@ def _merge_response_delta(base_response: dict, delta: list[dict] | None) -> dict
             merged["responses"].append(record)
 
     return merged
+
+
+def _merge_pending_item(existing: dict | None, incoming: dict) -> dict:
+    if existing is None:
+        existing = {
+            "response": None,
+            "response_delta": [],
+            "events": [],
+            "last_seen_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    if incoming.get("response") is not None:
+        existing["response"] = incoming["response"]
+        existing["response_delta"] = []
+    elif incoming.get("response_delta"):
+        existing["response_delta"].extend(incoming["response_delta"])
+        existing["response_delta"] = existing["response_delta"][-500:]
+
+    if incoming.get("events"):
+        existing["events"].extend(incoming["events"])
+        existing["events"] = existing["events"][-100:]
+
+    existing["last_seen_at"] = incoming.get("last_seen_at") or datetime.now(timezone.utc).isoformat()
+    return existing
 
 
 def _merge_queued_heartbeat(existing: dict | None, hb: Heartbeat) -> dict:
@@ -116,6 +142,14 @@ async def _drain_pending_snapshot() -> dict[tuple[int, int], dict]:
 async def _pop_single_pending(exam_id: int, user_id: int) -> dict | None:
     async with _pending_lock:
         return _pending_heartbeats.pop((exam_id, user_id), None)
+
+
+async def _requeue_snapshot(snapshot: dict[tuple[int, int], dict]) -> None:
+    if not snapshot:
+        return
+    async with _pending_lock:
+        for key, item in snapshot.items():
+            _pending_heartbeats[key] = _merge_pending_item(_pending_heartbeats.get(key), item)
 
 
 async def _flush_pending_snapshot(snapshot: dict[tuple[int, int], dict]) -> None:
@@ -198,11 +232,19 @@ async def _heartbeat_batch_worker() -> None:
         await asyncio.sleep(HEARTBEAT_BATCH_WINDOW_SECONDS)
         snapshot = await _drain_pending_snapshot()
         if snapshot:
-            await _flush_pending_snapshot(snapshot)
+            try:
+                await _flush_pending_snapshot(snapshot)
+            except Exception:
+                logger.exception("Heartbeat batch flush failed; re-queueing pending items")
+                await _requeue_snapshot(snapshot)
 
     snapshot = await _drain_pending_snapshot()
     if snapshot:
-        await _flush_pending_snapshot(snapshot)
+        try:
+            await _flush_pending_snapshot(snapshot)
+        except Exception:
+            logger.exception("Final heartbeat batch flush failed; re-queueing pending items")
+            await _requeue_snapshot(snapshot)
 
 
 async def start_heartbeat_batch_worker() -> None:
@@ -290,7 +332,11 @@ async def submitResponse(sub: Submit, user=Depends(get_current_user)):
     """Finalise the exam — called once on submit or when time runs out."""
     pending = await _pop_single_pending(sub.exam_id, int(user["id"]))
     if pending:
-        await _flush_pending_snapshot({(sub.exam_id, int(user["id"])): pending})
+        try:
+            await _flush_pending_snapshot({(sub.exam_id, int(user["id"])): pending})
+        except Exception:
+            logger.exception("Pending heartbeat pre-flush failed before submit; continuing with direct submit")
+            await _requeue_snapshot({(sub.exam_id, int(user["id"])): pending})
 
     existing = await db.client.table("Responses") \
         .select("status") \
