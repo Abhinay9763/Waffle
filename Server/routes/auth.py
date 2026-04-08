@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -22,15 +23,32 @@ from config import STUDENT_EMAIL_DOMAIN
 
 router = APIRouter()
 
-NRPB_DATASET_PATH = Path(__file__).resolve().parents[1] / "datasets" / "NRPB.json"
+
+@lru_cache(maxsize=1)
+def _resolve_nrpb_dataset_path() -> Path | None:
+    env_path = (os.getenv("NRPB_DATASET_PATH") or "").strip()
+    candidates = []
+    if env_path:
+        candidates.append(Path(env_path))
+
+    candidates.extend([
+        Path("/etc/secrets/NRPB.json"),
+        Path(__file__).resolve().parents[1] / "datasets" / "NRPB.json",
+    ])
+
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
 
 
 @lru_cache(maxsize=1)
 def _load_nrpb_index() -> dict[str, dict]:
-    if not NRPB_DATASET_PATH.exists():
+    dataset_path = _resolve_nrpb_dataset_path()
+    if dataset_path is None:
         return {}
     try:
-        with NRPB_DATASET_PATH.open("r", encoding="utf-8") as f:
+        with dataset_path.open("r", encoding="utf-8") as f:
             rows = json.load(f)
     except Exception:
         return {}

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -18,16 +19,34 @@ router = APIRouter()
 EXAM_CACHE_TTL_SECONDS = 120
 PAPER_CACHE_TTL_SECONDS = 600
 EXAM_AVAILABLE_CACHE_TTL_SECONDS = 20
-SECTION_MAPPING_PATH = Path(__file__).resolve().parents[1] / "datasets" / "section_mapping.json"
 _exam_available_cache_version = 1
 
 
 @lru_cache(maxsize=1)
+def _resolve_section_mapping_path() -> Path | None:
+    env_path = (os.getenv("SECTION_MAPPING_PATH") or "").strip()
+    candidates = []
+    if env_path:
+        candidates.append(Path(env_path))
+
+    candidates.extend([
+        Path("/etc/secrets/section_mapping.json"),
+        Path(__file__).resolve().parents[1] / "datasets" / "section_mapping.json",
+    ])
+
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+@lru_cache(maxsize=1)
 def _load_section_mapping() -> dict:
-    if not SECTION_MAPPING_PATH.exists():
+    mapping_path = _resolve_section_mapping_path()
+    if mapping_path is None:
         return {}
     try:
-        with SECTION_MAPPING_PATH.open("r", encoding="utf-8") as f:
+        with mapping_path.open("r", encoding="utf-8") as f:
             payload = json.load(f)
         return payload if isinstance(payload, dict) else {}
     except Exception:
