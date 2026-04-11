@@ -260,6 +260,18 @@ def _count_questions(questions: dict) -> int:
     return len(_countable_question_ids(questions))
 
 
+def _countable_total_marks(questions: dict) -> int:
+    total = 0
+    for section in questions.get("sections", []):
+        for q in section.get("questions", []):
+            marks = int(q.get("marks", 1) or 0)
+            negative_marks = int(q.get("negative_marks", 0) or 0)
+            if marks == 0 and negative_marks == 0:
+                continue
+            total += marks
+    return total
+
+
 async def _get_release_state_by_exam_ids(exam_ids: list[int]) -> dict[int, dict]:
     if not exam_ids:
         return {}
@@ -876,7 +888,7 @@ async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
         "avg": round(sum(scores) / len(scores), 1) if scores else 0,
         "high": max(scores) if scores else 0,
         "low": min(scores) if scores else 0,
-        "total_marks": exam["total_marks"],
+        "total_marks": _countable_total_marks(paper.get("questions", {})) or exam["total_marks"],
     }
 
     return {"exam": exam, "responses": scored, "summary": summary}

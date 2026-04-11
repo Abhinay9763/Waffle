@@ -305,26 +305,31 @@ def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
 
 def _compute_total_marks_for_submission(response: dict, questions_data: dict, fallback_total: int) -> int:
     scope_ids_raw = response.get("grading_scope_question_ids")
-    if not isinstance(scope_ids_raw, list):
-        return fallback_total
-
-    scope_ids = {qid for qid in scope_ids_raw if isinstance(qid, int)}
-    if not scope_ids:
-        return fallback_total
+    scope_ids: set[int] | None = None
+    if isinstance(scope_ids_raw, list):
+        scope_ids = {qid for qid in scope_ids_raw if isinstance(qid, int)}
+        if not scope_ids:
+            scope_ids = set()
 
     total = 0
+    saw_countable = False
     for section in questions_data.get("sections", []):
         for q in section.get("questions", []):
             qid = q.get("question_id")
-            if not isinstance(qid, int) or qid not in scope_ids:
+            if not isinstance(qid, int):
+                continue
+            if scope_ids is not None and qid not in scope_ids:
                 continue
             marks = int(q.get("marks", 1) or 0)
             negative_marks = int(q.get("negative_marks", 0) or 0)
             if marks == 0 and negative_marks == 0:
                 continue
+            saw_countable = True
             total += marks
 
-    return total if total > 0 else fallback_total
+    if saw_countable:
+        return total
+    return fallback_total
 
 
 def _option_idx_to_letter(idx: int | None) -> str | None:
