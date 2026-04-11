@@ -28,6 +28,33 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _locked_content_snapshot(questions: dict) -> dict:
+    """Build a comparable snapshot that ignores marks-only fields.
+
+    For used papers, only answer-key and marks should be mutable. Since answer-key
+    is stored in `answers`, we allow question-side changes only in marks fields by
+    comparing snapshots that strip those fields.
+    """
+    if not isinstance(questions, dict):
+        return {}
+
+    snapshot = json.loads(json.dumps(questions))
+    meta = snapshot.get("meta")
+    if isinstance(meta, dict):
+        meta.pop("total_marks", None)
+
+    for section in snapshot.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        for q in section.get("questions", []):
+            if not isinstance(q, dict):
+                continue
+            q.pop("marks", None)
+            q.pop("negative_marks", None)
+
+    return snapshot
+
+
 def _normalize_option(value) -> int | None:
     if value is None:
         return None
@@ -547,11 +574,14 @@ async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_curr
 
     existing_questions = existing.data[0].get("questions") or {}
     incoming_questions = paper.questions or {}
-    if used_before_res.data and incoming_questions != existing_questions:
-        raise HTTPException(
-            status_code=HTTP_409_CONFLICT,
-            detail="This paper has already been used in an exam. Only answer option selection can be changed.",
-        )
+    if used_before_res.data:
+        existing_locked = _locked_content_snapshot(existing_questions)
+        incoming_locked = _locked_content_snapshot(incoming_questions)
+        if incoming_locked != existing_locked:
+            raise HTTPException(
+                status_code=HTTP_409_CONFLICT,
+                detail="This paper has already been used in an exam. Only answer option selection and marks can be changed.",
+            )
 
     # Cleanup only keys no longer referenced by any paper after update.
     old_keys = collect_image_keys(existing_questions)

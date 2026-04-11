@@ -465,6 +465,7 @@ function QuestionEditor({
 }) {
   const qImgRef = useRef<HTMLInputElement>(null);
   const contentReadonly = !!readonly || !!keyOnlyMode;
+  const marksReadonly = !!readonly;
 
   return (
     <div className="flex flex-col gap-7 flex-1 overflow-y-auto p-8">
@@ -588,7 +589,7 @@ function QuestionEditor({
             type="number"
             min={0}
             value={q.marks}
-            readOnly={contentReadonly}
+            readOnly={marksReadonly}
             onChange={e => dispatch({ type: "UPDATE_MARKS", marks: Number(e.target.value) })}
             className="
               w-20 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5
@@ -605,7 +606,7 @@ function QuestionEditor({
             min={0}
             step={0.25}
             value={q.negative_marks}
-            readOnly={contentReadonly}
+            readOnly={marksReadonly}
             onChange={e => dispatch({ type: "UPDATE_NEG_MARKS", neg: Number(e.target.value) })}
             className="
               w-20 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5
@@ -1105,7 +1106,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
 
       {!isReadOnly && keyOnlyMode && (
         <div className="mx-5 mt-4 rounded-lg border border-amber-800/60 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
-          This paper has already been used in an exam. You can only change the correct option selection.
+          This paper has already been used in an exam. You can only change the correct option selection and marks.
         </div>
       )}
 
