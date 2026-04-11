@@ -72,6 +72,7 @@ export default function ResponseDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ReviewResponse | null>(null);
   const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
+  const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
   const [showFlagModal, setShowFlagModal] = useState(false);
   const [flagSubmitting, setFlagSubmitting] = useState(false);
   const [flagError, setFlagError] = useState<string | null>(null);
@@ -309,6 +310,15 @@ export default function ResponseDetailPage() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
           <section className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
+            <div className="mb-3 md:hidden">
+              <button
+                type="button"
+                onClick={() => setMobilePaletteOpen(true)}
+                className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300"
+              >
+                Question Nav
+              </button>
+            </div>
             {!activeQuestion ? (
               <p className="text-sm text-zinc-500">No questions found in this response.</p>
             ) : (
@@ -369,7 +379,7 @@ export default function ResponseDetailPage() {
             )}
           </section>
 
-          <aside className="w-full shrink-0 overflow-y-auto border-t border-zinc-800 bg-zinc-900/30 p-4 lg:w-72 lg:border-l lg:border-t-0">
+          <aside className="hidden shrink-0 overflow-y-auto border-l border-zinc-800 bg-zinc-900/30 p-4 md:block lg:w-72">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Question palette</p>
             <div className="space-y-4">
               {data.sections.map((section) => (
@@ -413,6 +423,67 @@ export default function ResponseDetailPage() {
               <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-zinc-600" />Not answered</div>
             </div>
           </aside>
+
+          {mobilePaletteOpen && (
+            <div className="fixed inset-0 z-50 bg-zinc-950/80 md:hidden">
+              <aside className="absolute inset-y-0 right-0 w-[86vw] max-w-sm overflow-y-auto border-l border-zinc-800 bg-zinc-900 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Question Nav</p>
+                  <button
+                    type="button"
+                    onClick={() => setMobilePaletteOpen(false)}
+                    className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {data.sections.map((section) => (
+                    <div key={section.section_id} className="space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{section.name}</p>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {section.questions.map((q, idx) => {
+                          const displayNum = data.sections
+                            .flatMap((s) => s.questions)
+                            .findIndex((x) => x.question_id === q.question_id) + 1;
+
+                          const stateClass = q.chosen_option === null
+                            ? "border-zinc-700 bg-zinc-900 text-zinc-400"
+                            : q.is_correct
+                              ? "border-emerald-700/60 bg-emerald-950/25 text-emerald-300"
+                              : "border-red-700/60 bg-red-950/25 text-red-300";
+
+                          const activeClass = q.question_id === activeQuestionId
+                            ? " ring-2 ring-yellow-500 ring-offset-1 ring-offset-zinc-950"
+                            : "";
+
+                          return (
+                            <button
+                              key={`${section.section_id}-${idx}`}
+                              type="button"
+                              onClick={() => {
+                                setActiveQuestionId(q.question_id);
+                                setMobilePaletteOpen(false);
+                              }}
+                              className={`h-9 rounded-lg border text-xs font-medium transition-colors ${stateClass}${activeClass}`}
+                            >
+                              {displayNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 space-y-1.5 text-[11px] text-zinc-500">
+                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500" />Correct</div>
+                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500" />Wrong</div>
+                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-zinc-600" />Not answered</div>
+                </div>
+              </aside>
+            </div>
+          )}
         </div>
       </main>
     </div>
