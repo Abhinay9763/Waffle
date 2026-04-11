@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "loadtest:discover": "node load-test/discover-hotspots.mjs",
+    "loadtest:render": "k6 run load-test/render-hotspots.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

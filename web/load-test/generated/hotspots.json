@@ -1,0 +1,406 @@
+{
+  "generated_at": "2026-04-11T15:21:52.986Z",
+  "source_root": "src",
+  "top_n_recommendation": 12,
+  "endpoints": [
+    {
+      "route": "/response/heartbeat",
+      "matches": 2,
+      "files": [
+        "src/components/student/BlindExamRunner.tsx",
+        "src/components/student/ExamRunner.tsx"
+      ],
+      "file_count": 2,
+      "score": 80
+    },
+    {
+      "route": "/response/submit",
+      "matches": 4,
+      "files": [
+        "src/components/student/BlindExamRunner.tsx",
+        "src/components/student/ExamRunner.tsx"
+      ],
+      "file_count": 2,
+      "score": 56
+    },
+    {
+      "route": "/exam/:param/take",
+      "matches": 5,
+      "files": [
+        "src/app/(student)/exam/[examId]/blind/page.tsx",
+        "src/app/(student)/exam/[examId]/normal/page.tsx",
+        "src/app/(student)/student/page.tsx",
+        "src/components/student/BlindExamRunner.tsx",
+        "src/components/student/ExamRunner.tsx"
+      ],
+      "file_count": 5,
+      "score": 50
+    },
+    {
+      "route": "/exam/:param/snapshot",
+      "matches": 2,
+      "files": [
+        "src/app/(faculty)/exams/[examId]/live/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 43
+    },
+    {
+      "route": "/exam/list",
+      "matches": 5,
+      "files": [
+        "src/app/(faculty)/exams/page.tsx",
+        "src/app/(faculty)/responses/page.tsx",
+        "src/app/(hod)/hod/exams/page.tsx",
+        "src/app/(hod)/hod/oversight/page.tsx",
+        "src/app/(hod)/hod/responses/page.tsx"
+      ],
+      "file_count": 5,
+      "score": 40
+    },
+    {
+      "route": "/user/session",
+      "matches": 5,
+      "files": [
+        "src/app/page.tsx",
+        "src/components/auth/LoginForm.tsx",
+        "src/components/layout/FacultySidebar.tsx",
+        "src/components/layout/HODSidebar.tsx",
+        "src/components/layout/StudentSidebar.tsx"
+      ],
+      "file_count": 5,
+      "score": 35
+    },
+    {
+      "route": "/paper/:param",
+      "matches": 6,
+      "files": [
+        "src/app/(faculty)/papers/[paperId]/page.tsx",
+        "src/app/(faculty)/papers/page.tsx",
+        "src/app/(hod)/hod/papers/[paperId]/page.tsx",
+        "src/app/(hod)/hod/papers/page.tsx",
+        "src/components/papers/PaperBuilder.tsx"
+      ],
+      "file_count": 5,
+      "score": 28
+    },
+    {
+      "route": "/response/my",
+      "matches": 2,
+      "files": [
+        "src/app/(student)/analytics/page.tsx",
+        "src/app/(student)/history/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 25
+    },
+    {
+      "route": "/paper/list",
+      "matches": 4,
+      "files": [
+        "src/app/(faculty)/papers/page.tsx",
+        "src/app/(hod)/hod/oversight/page.tsx",
+        "src/app/(hod)/hod/papers/page.tsx",
+        "src/components/exams/ExamScheduleForm.tsx"
+      ],
+      "file_count": 4,
+      "score": 20
+    },
+    {
+      "route": "/response/my/:param",
+      "matches": 1,
+      "files": [
+        "src/app/(student)/history/[responseId]/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 20
+    },
+    {
+      "route": "/response/my/:param/flag-question",
+      "matches": 1,
+      "files": [
+        "src/app/(student)/history/[responseId]/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 20
+    },
+    {
+      "route": "/exam/faculty-dashboard",
+      "matches": 1,
+      "files": [
+        "src/app/(faculty)/faculty/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 17
+    },
+    {
+      "route": "/exam/hod-dashboard",
+      "matches": 1,
+      "files": [
+        "src/app/(hod)/hod/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 17
+    },
+    {
+      "route": "/exam/:param",
+      "matches": 2,
+      "files": [
+        "src/app/(faculty)/exams/page.tsx",
+        "src/app/(hod)/hod/exams/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 10
+    },
+    {
+      "route": "/exam/:param/release-responses",
+      "matches": 2,
+      "files": [
+        "src/app/(faculty)/exams/page.tsx",
+        "src/app/(hod)/hod/exams/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 10
+    },
+    {
+      "route": "/paper/:param/download",
+      "matches": 2,
+      "files": [
+        "src/app/(faculty)/papers/page.tsx",
+        "src/app/(hod)/hod/papers/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 10
+    },
+    {
+      "route": "/paper/:param/download-xlsx",
+      "matches": 2,
+      "files": [
+        "src/app/(faculty)/papers/page.tsx",
+        "src/app/(hod)/hod/papers/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 10
+    },
+    {
+      "route": "/paper/import",
+      "matches": 2,
+      "files": [
+        "src/app/(faculty)/papers/page.tsx",
+        "src/app/(hod)/hod/papers/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 10
+    },
+    {
+      "route": "/paper/template/:param",
+      "matches": 2,
+      "files": [
+        "src/app/(faculty)/papers/page.tsx",
+        "src/app/(hod)/hod/papers/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 10
+    },
+    {
+      "route": "/hod/pending-faculty",
+      "matches": 2,
+      "files": [
+        "src/app/(hod)/approvals/page.tsx",
+        "src/app/(hod)/hod/oversight/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 10
+    },
+    {
+      "route": "/hod/faculty",
+      "matches": 2,
+      "files": [
+        "src/app/(hod)/hod/faculty/page.tsx",
+        "src/app/(hod)/hod/oversight/page.tsx"
+      ],
+      "file_count": 2,
+      "score": 10
+    },
+    {
+      "route": "/paper/create",
+      "matches": 2,
+      "files": [
+        "src/components/papers/PaperBuilder.tsx"
+      ],
+      "file_count": 1,
+      "score": 8
+    },
+    {
+      "route": "/user/forgot-password",
+      "matches": 1,
+      "files": [
+        "src/app/(auth)/forgot-password/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/user/reset-password/${encodeURIComponent(token",
+      "matches": 1,
+      "files": [
+        "src/app/(auth)/reset-password/[token]/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/exam/:param/retake",
+      "matches": 1,
+      "files": [
+        "src/app/(faculty)/exams/[examId]/live/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/exam/:param/stop",
+      "matches": 1,
+      "files": [
+        "src/app/(faculty)/exams/[examId]/live/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/response/queries/my-faculty",
+      "matches": 1,
+      "files": [
+        "src/app/(faculty)/queries/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/response/queries/:param/answer",
+      "matches": 1,
+      "files": [
+        "src/app/(faculty)/queries/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/hod/:param-faculty/:param",
+      "matches": 1,
+      "files": [
+        "src/app/(hod)/approvals/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/response/queries/hod-solved",
+      "matches": 1,
+      "files": [
+        "src/app/(hod)/hod/queries/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/exam/available",
+      "matches": 1,
+      "files": [
+        "src/app/(student)/student/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/response/queries/my",
+      "matches": 1,
+      "files": [
+        "src/app/(student)/student/queries/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/user/auth/:param",
+      "matches": 1,
+      "files": [
+        "src/app/users/auth/[token]/page.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/user/login",
+      "matches": 1,
+      "files": [
+        "src/components/auth/LoginForm.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/user/register",
+      "matches": 1,
+      "files": [
+        "src/components/auth/RegisterForm.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/user/student-preview",
+      "matches": 1,
+      "files": [
+        "src/components/auth/RegisterForm.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/exam/sections",
+      "matches": 1,
+      "files": [
+        "src/components/exams/ExamScheduleForm.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/exam/create",
+      "matches": 1,
+      "files": [
+        "src/components/exams/ExamScheduleForm.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/paper/upload-image",
+      "matches": 1,
+      "files": [
+        "src/components/papers/PaperBuilder.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/paper/:param/clone",
+      "matches": 1,
+      "files": [
+        "src/components/papers/PaperBuilder.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    },
+    {
+      "route": "/exam/:param/responses",
+      "matches": 1,
+      "files": [
+        "src/components/responses/ResponsesView.tsx"
+      ],
+      "file_count": 1,
+      "score": 5
+    }
+  ]
+}
