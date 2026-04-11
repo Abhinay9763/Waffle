@@ -20,17 +20,21 @@ export default function QuestionPalette({
   responses,
   onSelect,
   disabled = false,
+  mobileOpen = false,
+  onMobileClose,
 }: {
   sections: ExamSection[];
   activeId: number;
   responses: Record<number, QuestionResponse>;
   onSelect: (questionId: number) => void;
   disabled?: boolean;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }) {
   let displayNumber = 0;
 
-  return (
-    <aside className="w-full shrink-0 border-t border-zinc-800 bg-zinc-900/30 p-4 overflow-y-auto md:w-64 md:border-l md:border-t-0">
+  const content = (
+    <>
       <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Question palette</p>
       <div className="space-y-4">
         {sections.map((section) => (
@@ -73,6 +77,32 @@ export default function QuestionPalette({
         <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" />Answered + Marked</div>
         <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-zinc-600" />Empty</div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <aside className="hidden md:block w-64 shrink-0 border-l border-zinc-800 bg-zinc-900/30 p-4 overflow-y-auto">
+        {content}
+      </aside>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/80 md:hidden">
+          <div className="absolute inset-y-0 right-0 w-[86vw] max-w-sm border-l border-zinc-800 bg-zinc-900 p-4 overflow-y-auto">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Question Nav</p>
+              <button
+                type="button"
+                onClick={onMobileClose}
+                className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300"
+              >
+                Close
+              </button>
+            </div>
+            {content}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

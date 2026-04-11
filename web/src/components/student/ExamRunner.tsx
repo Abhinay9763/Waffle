@@ -24,6 +24,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showLeavePrompt, setShowLeavePrompt] = useState(false);
   const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
+  const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [warningCount, setWarningCount] = useState(0);
@@ -685,6 +686,13 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
           <section className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <button
+                type="button"
+                onClick={() => setMobilePaletteOpen(true)}
+                className="inline-flex rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 md:hidden"
+              >
+                Question Nav
+              </button>
               <span>Q {activeIdx + 1} / {questions.length}</span>
               <span>&bull;</span>
               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-800/60 bg-emerald-950/20 px-1.5 py-0.5 text-emerald-300">
@@ -753,9 +761,12 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
             sections={exam.sections}
             activeId={active.question_id}
             responses={responses}
+            mobileOpen={mobilePaletteOpen}
+            onMobileClose={() => setMobilePaletteOpen(false)}
             onSelect={(questionId) => {
               const index = questions.findIndex((q) => q.question_id === questionId);
               if (index >= 0) setActiveIdx(index);
+              setMobilePaletteOpen(false);
             }}
           />
         </div>

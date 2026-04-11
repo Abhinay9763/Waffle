@@ -631,16 +631,17 @@ const STATUS_STYLE = {
 };
 
 function NavPanel({
-  sections, activeId, dispatch, readonly, structureLocked,
+  sections, activeId, dispatch, readonly, structureLocked, mobileOpen = false, onMobileClose,
 }: {
   sections: BuilderSection[]; activeId: number | null;
   dispatch: React.Dispatch<Action>; readonly?: boolean; structureLocked?: boolean;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }) {
   let palIdx = 0;
 
-  return (
-    <aside className="w-64 shrink-0 border-l border-zinc-800 flex flex-col bg-zinc-900/30">
-
+  const panelContent = (
+    <>
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
         {sections.map(section => (
           <div key={section.section_id}>
@@ -683,7 +684,10 @@ function NavPanel({
                   <button
                     key={q.question_id}
                     type="button"
-                    onClick={() => dispatch({ type: "GO_TO", id: q.question_id })}
+                    onClick={() => {
+                      dispatch({ type: "GO_TO", id: q.question_id });
+                      onMobileClose?.();
+                    }}
                     className={`
                       h-9 rounded-lg border text-xs font-medium transition-all
                       ${STATUS_STYLE[status]}
@@ -744,8 +748,33 @@ function NavPanel({
           </button>
         </div>
       )}
+    </>
+  );
 
-    </aside>
+  return (
+    <>
+      <aside className="hidden w-64 shrink-0 border-l border-zinc-800 bg-zinc-900/30 md:flex md:flex-col">
+        {panelContent}
+      </aside>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/80 md:hidden">
+          <aside className="absolute inset-y-0 right-0 flex w-[86vw] max-w-sm flex-col border-l border-zinc-800 bg-zinc-900">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Question Nav</p>
+              <button
+                type="button"
+                onClick={onMobileClose}
+                className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300"
+              >
+                Close
+              </button>
+            </div>
+            {panelContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -756,6 +785,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
   const [state, dispatch] = useReducer(reducer, initialData, buildInitialState);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [autosavePaperId, setAutosavePaperId] = useState<number | null>(paperId ?? null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [autosaveAt, setAutosaveAt] = useState<string | null>(null);
@@ -1089,6 +1119,13 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
               {saving ? "Saving…" : paperId !== undefined ? "Update paper" : "Save paper"}
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 md:hidden"
+          >
+            Question Nav
+          </button>
         </div>
       </header>
 
@@ -1141,6 +1178,8 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
           dispatch={dispatch}
           readonly={isReadOnly}
           structureLocked={keyOnlyMode}
+          mobileOpen={mobileNavOpen}
+          onMobileClose={() => setMobileNavOpen(false)}
         />
 
       </div>
