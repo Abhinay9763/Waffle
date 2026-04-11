@@ -44,6 +44,7 @@ export default async function PaperDetailPage({
       paperId={data.id}
       initialData={initialData}
       inUse={data.in_use ?? false}
+      canEdit={data.can_edit ?? true}
     />
   );
 }

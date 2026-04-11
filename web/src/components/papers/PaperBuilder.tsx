@@ -311,6 +311,7 @@ interface PaperBuilderProps {
   paperId?: number;
   initialData?: InitialPaperData;
   inUse?: boolean;
+  canEdit?: boolean;
   basePath?: string;
 }
 
@@ -746,7 +747,7 @@ function NavPanel({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function PaperBuilder({ paperId, initialData, inUse = false, basePath = "/papers" }: PaperBuilderProps = {}) {
+export default function PaperBuilder({ paperId, initialData, inUse = false, canEdit = true, basePath = "/papers" }: PaperBuilderProps = {}) {
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, initialData, buildInitialState);
   const [saving, setSaving] = useState(false);
@@ -874,6 +875,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
   const displayIdx = state.activeId ? getDisplayIndex(state.sections, state.activeId) : 0;
   const totalQ = flat.length;
   const totalS = state.sections.length;
+  const isReadOnly = inUse || !canEdit;
 
   const buildPayload = () => {
     const totalMarks = flat.reduce((sum, q) => sum + q.marks, 0);
@@ -911,7 +913,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
   };
 
   const persistDraft = async (fingerprint: string) => {
-    if (inUse || autosaveInFlightRef.current) return;
+    if (isReadOnly || autosaveInFlightRef.current) return;
     if (!hasMeaningfulContent()) return;
 
     const token = getCookie("wfl-session") as string | undefined;
@@ -951,7 +953,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
   };
 
   useEffect(() => {
-    if (inUse) return;
+    if (isReadOnly) return;
 
     const fingerprint = JSON.stringify(buildPayload());
     if (!lastAutosaveFingerprintRef.current) {
@@ -972,7 +974,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
       }
     };
     // We intentionally depend on state so autosave reacts to any draft edit.
-  }, [state, inUse, paperId, autosavePaperId]);
+  }, [state, isReadOnly, paperId, autosavePaperId]);
 
   const handleSave = async () => {
     setSaveError(null);
@@ -1034,22 +1036,22 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
         <input
           value={state.examName}
           onChange={e => dispatch({ type: "SET_NAME", name: e.target.value })}
-          readOnly={inUse}
+          readOnly={isReadOnly}
           placeholder="Untitled paper"
           className="flex-1 bg-transparent text-sm font-medium text-zinc-200 placeholder:text-zinc-600 outline-none min-w-0 read-only:cursor-default"
         />
 
         <div className="flex items-center gap-3 shrink-0">
-          {inUse && (
+          {isReadOnly && (
             <span className="flex items-center gap-1.5 text-xs text-amber-500 border border-amber-800/50 bg-amber-950/20 rounded-lg px-2.5 py-1">
               <Lock className="w-3 h-3" />
-              In use — read only
+              Read only
             </span>
           )}
           <span className="text-xs text-zinc-600 tabular-nums">
             {totalQ}Q · {totalS}S
           </span>
-          {!inUse && (
+          {!isReadOnly && (
             <span className={`text-xs ${autosaveStatus === "error" ? "text-red-400" : "text-zinc-500"}`}>
               {autosaveStatus === "saving" && "Autosaving..."}
               {autosaveStatus === "saved" && `Saved${autosaveAt ? ` at ${autosaveAt}` : ""}`}
@@ -1060,7 +1062,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
           {saveError && (
             <span className="text-xs text-red-400">{saveError}</span>
           )}
-          {paperId !== undefined && (
+          {paperId !== undefined && !isReadOnly && (
             <button
               type="button"
               onClick={handleClone}
@@ -1071,7 +1073,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
               {cloning ? "Cloning…" : "Clone"}
             </button>
           )}
-          {!inUse && (
+          {!isReadOnly && (
             <button
               type="button"
               onClick={handleSave}
@@ -1091,6 +1093,12 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
         </div>
       )}
 
+      {!inUse && !canEdit && (
+        <div className="mx-5 mt-4 rounded-lg border border-amber-800/60 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
+          This paper belongs to another faculty member. It is READ-ONLY
+        </div>
+      )}
+
       {/* ── Main split ──────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
 
@@ -1100,7 +1108,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
             displayIdx={displayIdx}
             total={totalQ}
             dispatch={dispatch}
-            readonly={inUse}
+            readonly={isReadOnly}
             onUploadQImage={handleUploadQImage}
             onPasteQImage={handlePasteQImage}
             onRemoveQImage={() => dispatch({ type: "SET_QUESTION_IMAGE", url: undefined })}
@@ -1119,7 +1127,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
           sections={state.sections}
           activeId={state.activeId}
           dispatch={dispatch}
-          readonly={inUse}
+          readonly={isReadOnly}
         />
 
       </div>
@@ -1128,7 +1136,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, base
       <footer className="flex items-center justify-between px-5 h-14 border-t border-zinc-800 bg-zinc-900/50 shrink-0">
 
         <div className="flex items-center gap-2">
-          {!inUse && (
+          {!isReadOnly && (
             <>
               <button
                 type="button"

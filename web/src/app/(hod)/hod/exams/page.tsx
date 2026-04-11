@@ -13,6 +13,7 @@ interface Exam {
   total_marks: number;
   start: string;
   end: string;
+  can_manage: boolean;
 }
 
 function statusOf(start: string, end: string): "live" | "upcoming" | "ended" {
@@ -109,7 +110,7 @@ export default function HodExamsPage() {
                 <Link href={`/hod/responses/${exam.id}`} className="flex items-center gap-1 rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200">
                   Results <ChevronRight className="h-3.5 w-3.5" />
                 </Link>
-                {s !== "live" && (
+                {s !== "live" && exam.can_manage && (
                   <button
                     onClick={() => handleDelete(exam)}
                     disabled={deletingId === exam.id}

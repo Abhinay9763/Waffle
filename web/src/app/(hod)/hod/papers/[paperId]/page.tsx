@@ -43,6 +43,7 @@ export default async function HodPaperDetailPage({
       paperId={data.id}
       initialData={initialData}
       inUse={data.in_use ?? false}
+      canEdit={data.can_edit ?? false}
       basePath="/hod/papers"
     />
   );

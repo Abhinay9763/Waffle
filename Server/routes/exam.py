@@ -475,7 +475,10 @@ async def listExams(user=Depends(get_current_user)):
     if user.get("role") != "HOD":
         query = query.eq("creator_id", user["id"])
     response = await query.execute()
-    return {"exams": response.data}
+    exams = response.data or []
+    for exam in exams:
+        exam["can_manage"] = exam.get("creator_id") == user["id"]
+    return {"exams": exams}
 
 
 @router.get("/exam/faculty-dashboard")
@@ -638,8 +641,13 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
 
     active, idle, submitted = _build_live_buckets(resp_res.data, total_questions)
 
+    exam_payload = {
+        **exam,
+        "can_manage": exam.get("creator_id") == user["id"],
+    }
+
     return JSONResponse(
-        content={"exam": exam, "active": active, "idle": idle, "submitted": submitted},
+        content={"exam": exam_payload, "active": active, "idle": idle, "submitted": submitted},
         headers={"Cache-Control": "no-store"},
     )
 
@@ -703,9 +711,14 @@ async def getExamSnapshot(
     logs = logs_res.data or []
     last_log_at = logs[-1]["created_at"] if logs and since else (logs[0]["created_at"] if logs else None)
 
+    exam_payload = {
+        **exam,
+        "can_manage": exam.get("creator_id") == user["id"],
+    }
+
     return JSONResponse(
         content={
-            "exam": exam,
+            "exam": exam_payload,
             "active": active,
             "idle": idle,
             "submitted": submitted,

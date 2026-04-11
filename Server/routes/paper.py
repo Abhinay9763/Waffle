@@ -444,7 +444,7 @@ async def downloadTemplate(template_name: str, user=Depends(get_current_user)):
 
 @router.get("/paper/list")
 async def listPapers(user=Depends(get_current_user)):
-    query = db.client.table("QuestionPapers").select("id,questions")
+    query = db.client.table("QuestionPapers").select("id,questions,creator_id")
     if user.get("role") != "HOD":
         query = query.eq("creator_id", user["id"])
     response = await query.execute()
@@ -474,6 +474,7 @@ async def listPapers(user=Depends(get_current_user)):
             "name": meta.get("exam_name") or f"Paper #{p['id']}",
             "total_marks": total_marks,
             "in_use": p["id"] in in_use_ids,
+            "can_edit": p.get("creator_id") == user["id"],
         })
 
     return {"papers": papers}
@@ -500,6 +501,7 @@ async def getPaper(paper_id: int, user=Depends(get_current_user)):
         .limit(1) \
         .execute()
     paper["in_use"] = len(exam_res.data) > 0
+    paper["can_edit"] = paper.get("creator_id") == user["id"]
     return paper
 
 

@@ -12,6 +12,7 @@ interface Paper {
   name: string;
   total_marks: number;
   in_use: boolean;
+  can_edit: boolean;
 }
 
 export default function HodPapersPage() {
@@ -105,9 +106,9 @@ export default function HodPapersPage() {
               </button>
               <button
                 onClick={() => void handleDelete(paper)}
-                disabled={paper.in_use || deletingId === paper.id}
+                disabled={!paper.can_edit || paper.in_use || deletingId === paper.id}
                 className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed"
-                title={paper.in_use ? "Paper in use" : "Delete paper"}
+                title={!paper.can_edit ? "You can only view other faculty papers" : (paper.in_use ? "Paper in use" : "Delete paper")}
               >
                 {deletingId === paper.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               </button>

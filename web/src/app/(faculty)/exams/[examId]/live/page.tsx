@@ -15,7 +15,7 @@ const POLL_MS = 10_000;
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface ExamInfo {
-  id: number; name: string; start: string; end: string; total_marks: number;
+  id: number; name: string; start: string; end: string; total_marks: number; can_manage?: boolean;
 }
 interface ActiveStudent {
   student_name: string; student_roll: string;
@@ -176,6 +176,10 @@ export default function LiveControlCentre() {
   }, [fetchAll]);
 
   const executeRetake = useCallback(async (userId: number, studentName: string) => {
+    if (!exam?.can_manage) {
+      toast.error("You can only view this exam. Retake actions are disabled.");
+      return;
+    }
     setRetaking(userId);
     try {
       const res = await fetch(`${API}/exam/${examId}/retake`, {
@@ -198,7 +202,7 @@ export default function LiveControlCentre() {
     } finally {
       setRetaking(null);
     }
-  }, [examId, fetchAll]);
+  }, [examId, fetchAll, exam?.can_manage]);
 
   const handleRetake = useCallback((userId: number, studentName: string) => {
     if (retaking !== null) return;
@@ -206,6 +210,10 @@ export default function LiveControlCentre() {
   }, [retaking]);
 
   const executeStop = useCallback(async () => {
+    if (!exam?.can_manage) {
+      toast.error("You can only view this exam. Stop action is disabled.");
+      return;
+    }
     setStopping(true);
     try {
       const res = await fetch(`${API}/exam/${examId}/stop`, {
@@ -224,7 +232,7 @@ export default function LiveControlCentre() {
     } finally {
       setStopping(false);
     }
-  }, [examId, fetchAll]);
+  }, [examId, fetchAll, exam?.can_manage]);
 
   const handleStop = useCallback(() => {
     if (stopping) return;
@@ -327,7 +335,7 @@ export default function LiveControlCentre() {
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
-          {new Date(exam.end) > new Date() && (
+          {exam.can_manage && new Date(exam.end) > new Date() && (
             <button
               onClick={handleStop}
               disabled={stopping}
@@ -407,18 +415,20 @@ export default function LiveControlCentre() {
                 blindMode={blindModeByRoll[s.student_roll] === true}
               >
                 <span className="text-[11px] text-zinc-600 shrink-0">{fmtTime(s.submitted_at)}</span>
-                <button
-                  onClick={() => handleRetake(s.user_id, s.student_name)}
-                  disabled={retaking === s.user_id}
-                  className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md
-                    border border-zinc-700 text-zinc-400 hover:border-amber-700 hover:text-amber-400
-                    hover:bg-amber-950/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                >
-                  {retaking === s.user_id
-                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                    : <RotateCcw className="w-3 h-3" />}
-                  Allow retake
-                </button>
+                {exam.can_manage && (
+                  <button
+                    onClick={() => handleRetake(s.user_id, s.student_name)}
+                    disabled={retaking === s.user_id}
+                    className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md
+                      border border-zinc-700 text-zinc-400 hover:border-amber-700 hover:text-amber-400
+                      hover:bg-amber-950/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    {retaking === s.user_id
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <RotateCcw className="w-3 h-3" />}
+                    Allow retake
+                  </button>
+                )}
               </StudentRow>
             ))}
           </Section>
