@@ -76,6 +76,13 @@ class Submit(BaseModel):
     exam_id: int
     response: dict  # final answers on exam end / manual submit
 
+
+class FlagQuestionRequest(BaseModel):
+    question_id: int
+    why_wrong: str
+    expected_answer: str
+    correct_option: str
+
 class RetakeRequest(BaseModel):
     user_id: int
 

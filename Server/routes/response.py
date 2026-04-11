@@ -3,11 +3,11 @@ import asyncio
 import os
 import logging
 
-from fastapi import APIRouter, Depends
-from starlette.status import HTTP_200_OK
+from fastapi import APIRouter, Depends, HTTPException
+from starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND
 
 from deps import get_current_user
-from models import Heartbeat, Submit
+from models import Heartbeat, Submit, FlagQuestionRequest
 from supa import db
 
 router = APIRouter()
@@ -319,6 +319,29 @@ def _compute_total_marks_for_submission(response: dict, questions_data: dict, fa
     return total if total > 0 else fallback_total
 
 
+def _filter_questions_by_scope(questions_data: dict, scope_ids: set[int] | None) -> dict:
+    if not scope_ids:
+        return questions_data
+
+    filtered_sections = []
+    for section in questions_data.get("sections", []):
+        kept_questions = []
+        for q in section.get("questions", []):
+            qid = q.get("question_id")
+            if isinstance(qid, int) and qid in scope_ids:
+                kept_questions.append(q)
+        if kept_questions:
+            filtered_sections.append({
+                **section,
+                "questions": kept_questions,
+            })
+
+    return {
+        **questions_data,
+        "sections": filtered_sections,
+    }
+
+
 @router.post("/response/heartbeat", status_code=HTTP_200_OK)
 async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
     """Queue heartbeats and persist in short batches to reduce write pressure."""
@@ -414,3 +437,182 @@ async def getMyResponses(user=Depends(get_current_user)):
         })
 
     return {"responses": result}
+
+
+@router.get("/response/my/{response_id}", status_code=HTTP_200_OK)
+async def getMyResponseDetail(response_id: int, user=Depends(get_current_user)):
+    """Detailed submission view for a student, including correct vs chosen options."""
+    resp_res = await db.client.table("Responses") \
+        .select("id,submitted_at,response,exam_id,Exams(id,name,total_marks,start,end,questionpaper_id)") \
+        .eq("id", response_id) \
+        .eq("user_id", user["id"]) \
+        .eq("status", "submitted") \
+        .limit(1) \
+        .execute()
+
+    if not resp_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Response not found.")
+
+    row = resp_res.data[0]
+    exam = row.get("Exams") or {}
+    question_paper_id = exam.get("questionpaper_id")
+    if not question_paper_id:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found for this response.")
+
+    paper_res = await db.client.table("QuestionPapers") \
+        .select("id,questions,answers") \
+        .eq("id", question_paper_id) \
+        .limit(1) \
+        .execute()
+    if not paper_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found.")
+
+    paper = paper_res.data[0]
+    questions_data = paper.get("questions") or {}
+    answers = paper.get("answers") or {}
+    submission = row.get("response") or {}
+
+    scope_raw = submission.get("grading_scope_question_ids")
+    scope_ids: set[int] | None = None
+    if isinstance(scope_raw, list):
+        scope_ids = {qid for qid in scope_raw if isinstance(qid, int)}
+
+    display_questions = _filter_questions_by_scope(questions_data, scope_ids)
+    submitted_map: dict[int, dict] = {}
+    for item in submission.get("responses", []):
+        qid = item.get("question_id") if isinstance(item, dict) else None
+        if isinstance(qid, int):
+            submitted_map[qid] = {
+                "question_id": qid,
+                "option": item.get("option"),
+                "marked": bool(item.get("marked", False)),
+            }
+
+    review_sections = []
+    for section in display_questions.get("sections", []):
+        questions = []
+        for q in section.get("questions", []):
+            qid = q.get("question_id")
+            if not isinstance(qid, int):
+                continue
+            correct = answers.get(str(qid)) if str(qid) in answers else answers.get(qid)
+            chosen = submitted_map.get(qid, {}).get("option")
+            questions.append({
+                **q,
+                "correct_option": correct,
+                "chosen_option": chosen,
+                "marked": bool(submitted_map.get(qid, {}).get("marked", False)),
+                "is_correct": chosen is not None and correct is not None and chosen == correct,
+            })
+
+        review_sections.append({
+            **section,
+            "questions": questions,
+        })
+
+    score = _compute_score(submission, answers, display_questions)
+    total_marks = _compute_total_marks_for_submission(
+        submission,
+        display_questions,
+        exam.get("total_marks") or 1,
+    )
+    pct_base = total_marks or 1
+
+    return {
+        "response": {
+            "id": row["id"],
+            "submitted_at": row.get("submitted_at"),
+            "exam_id": exam.get("id"),
+            "exam_name": exam.get("name"),
+            "exam_start": exam.get("start"),
+            "exam_end": exam.get("end"),
+            "score": score,
+            "total_marks": total_marks,
+            "percentage": round(score / pct_base * 100, 1),
+            "sections": review_sections,
+        }
+    }
+
+
+@router.post("/response/my/{response_id}/flag-question", status_code=HTTP_200_OK)
+async def flagMyQuestion(response_id: int, body: FlagQuestionRequest, user=Depends(get_current_user)):
+    """Allow students to flag a specific reviewed question for faculty follow-up."""
+    why_wrong = (body.why_wrong or "").strip()
+    expected_answer = (body.expected_answer or "").strip()
+    correct_option = (body.correct_option or "").strip().upper()
+
+    if not why_wrong:
+                raise HTTPException(status_code=400, detail="Why is this wrong? is required.")
+    if not expected_answer:
+                raise HTTPException(status_code=400, detail="What would the correct answer be? is required.")
+    if correct_option not in {"A", "B", "C", "D"}:
+                raise HTTPException(status_code=400, detail="Correct option must be one of A, B, C, D.")
+
+    resp_res = await db.client.table("Responses") \
+        .select("id,response,Exams(id,name,creator_id,questionpaper_id)") \
+        .eq("id", response_id) \
+        .eq("user_id", user["id"]) \
+        .eq("status", "submitted") \
+        .limit(1) \
+        .execute()
+    if not resp_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Response not found.")
+
+    row = resp_res.data[0]
+    exam = row.get("Exams") or {}
+    faculty_id = exam.get("creator_id")
+    paper_id = exam.get("questionpaper_id")
+    if not isinstance(faculty_id, int):
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Faculty owner not found for this exam.")
+    if not isinstance(paper_id, int):
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found for this response.")
+
+    paper_res = await db.client.table("QuestionPapers") \
+        .select("questions") \
+        .eq("id", paper_id) \
+        .limit(1) \
+        .execute()
+    if not paper_res.data:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found.")
+
+    questions_data = paper_res.data[0].get("questions") or {}
+    submission = row.get("response") or {}
+    scope_raw = submission.get("grading_scope_question_ids")
+    scope_ids: set[int] | None = None
+    if isinstance(scope_raw, list):
+        scope_ids = {qid for qid in scope_raw if isinstance(qid, int)}
+    display_questions = _filter_questions_by_scope(questions_data, scope_ids)
+
+    valid_qids = {
+        q.get("question_id")
+        for section in display_questions.get("sections", [])
+        for q in section.get("questions", [])
+        if isinstance(q.get("question_id"), int)
+    }
+    if body.question_id not in valid_qids:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question not found in this response.")
+
+    payload = {
+        "response_id": response_id,
+        "exam_id": exam.get("id"),
+        "exam_name": exam.get("name"),
+        "question_id": body.question_id,
+        "why_is_this_wrong": why_wrong,
+        "what_should_be_correct": expected_answer,
+        "correct_option": correct_option,
+    }
+
+    row_to_insert = {
+        "student_id": user["id"],
+        "faculty_id": faculty_id,
+        "payload": payload,
+    }
+    try:
+        await db.client.table("FlaggedQuestions").insert(row_to_insert).execute()
+    except Exception:
+        try:
+            await db.client.table("flagged_questions").insert(row_to_insert).execute()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Flag table not found or schema mismatch. Create FlaggedQuestions/flagged_questions with student_id, faculty_id, payload.")
+
+    return {"msg": "Question flagged successfully."}

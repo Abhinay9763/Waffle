@@ -109,7 +109,7 @@ function ScoreCell({ score, total }: { score: number; total: number }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function ResponsesView({ examId }: { examId: number }) {
+export default function ResponsesView({ examId, basePath = "/responses" }: { examId: number; basePath?: string }) {
   const [rows, setRows] = useState<ResponseRow[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [exam, setExam] = useState<ExamInfo | null>(null);
@@ -146,7 +146,7 @@ export default function ResponsesView({ examId }: { examId: number }) {
       <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
         <p className="text-zinc-500 text-sm">Failed to load responses.</p>
         <Link
-          href="/responses"
+          href={basePath}
           className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
         >
           ← Back to results
@@ -165,7 +165,7 @@ export default function ResponsesView({ examId }: { examId: number }) {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Link
-              href="/responses"
+              href={basePath}
               className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import { API } from "@/lib/config";
 
 interface MyResponse {
@@ -83,6 +84,7 @@ export default function HistoryPage() {
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 hidden sm:table-cell">Date</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500">Score</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500">Grade</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500">Review</th>
               </tr>
             </thead>
             <tbody>
@@ -101,6 +103,14 @@ export default function HistoryPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <PctBadge pct={r.percentage} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/history/${r.id}`}
+                      className="inline-flex rounded-md border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-200 transition hover:border-zinc-500"
+                    >
+                      View response
+                    </Link>
                   </td>
                 </tr>
               ))}

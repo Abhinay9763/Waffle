@@ -13,9 +13,9 @@ const NAV = [
   { label: "Faculty Approvals", href: "/approvals", icon: Users },
   { label: "Faculty Management", href: "/hod/faculty", icon: UserCheck },
   { label: "System Oversight", href: "/hod/oversight", icon: Activity },
-  { label: "Question Papers",  href: "/papers",        icon: FileText },
-  { label: "Exams",            href: "/exams",         icon: CalendarDays },
-  { label: "Results",          href: "/responses",     icon: BarChart2 },
+  { label: "Question Papers",  href: "/hod/papers",    icon: FileText },
+  { label: "Exams",            href: "/hod/exams",     icon: CalendarDays },
+  { label: "Results",          href: "/hod/responses", icon: BarChart2 },
 ];
 
 export default function HODSidebar() {

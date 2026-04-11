@@ -478,6 +478,103 @@ async def listExams(user=Depends(get_current_user)):
     return {"exams": response.data}
 
 
+@router.get("/exam/faculty-dashboard")
+async def facultyDashboard(user=Depends(get_current_user)):
+    if user.get("role") not in {"Faculty", "HOD", "Admin"}:
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Only faculty can access dashboard analytics.")
+
+    owner_id = user["id"]
+
+    exams_res = await db.client.table("Exams") \
+        .select("id,name,total_marks,start,end,created_at,questionpaper_id") \
+        .eq("creator_id", owner_id) \
+        .order("created_at", desc=True) \
+        .execute()
+    exams = exams_res.data or []
+
+    exam_ids = [e["id"] for e in exams if isinstance(e.get("id"), int)]
+    responses_count = 0
+    if exam_ids:
+        resp_res = await db.client.table("Responses") \
+            .select("id") \
+            .in_("exam_id", exam_ids) \
+            .eq("status", "submitted") \
+            .execute()
+        responses_count = len(resp_res.data or [])
+
+    papers_res = await db.client.table("QuestionPapers") \
+        .select("id,questions,created_at") \
+        .eq("creator_id", owner_id) \
+        .order("created_at", desc=True) \
+        .execute()
+    papers = papers_res.data or []
+
+    paper_name_by_id: dict[int, str] = {}
+    recent_papers = []
+    for paper in papers:
+        pid = paper.get("id")
+        questions = paper.get("questions") or {}
+        meta = questions.get("meta", {}) if isinstance(questions, dict) else {}
+        name = meta.get("exam_name") or f"Paper #{pid}"
+        total_marks = meta.get("total_marks") or sum(
+            q.get("marks", 0)
+            for s in questions.get("sections", [])
+            for q in s.get("questions", [])
+        )
+
+        if isinstance(pid, int):
+            paper_name_by_id[pid] = str(name)
+
+        recent_papers.append({
+            "id": pid,
+            "name": name,
+            "total_marks": total_marks,
+            "created_at": paper.get("created_at"),
+        })
+
+    flagged_count = 0
+    try:
+        flags_res = await db.client.table("FlaggedQuestions") \
+            .select("id") \
+            .eq("faculty_id", owner_id) \
+            .execute()
+        flagged_count = len(flags_res.data or [])
+    except Exception:
+        try:
+            flags_res = await db.client.table("flagged_questions") \
+                .select("id") \
+                .eq("faculty_id", owner_id) \
+                .execute()
+            flagged_count = len(flags_res.data or [])
+        except Exception:
+            flagged_count = 0
+
+    recent_exams = []
+    for exam in exams[:6]:
+        recent_exams.append({
+            "id": exam.get("id"),
+            "name": exam.get("name"),
+            "total_marks": exam.get("total_marks"),
+            "start": exam.get("start"),
+            "end": exam.get("end"),
+            "created_at": exam.get("created_at"),
+            "questionpaper_id": exam.get("questionpaper_id"),
+            "paper_name": paper_name_by_id.get(exam.get("questionpaper_id"), ""),
+        })
+
+    return {
+        "faculty_name": user.get("name") or "Faculty",
+        "stats": {
+            "question_papers_created": len(papers),
+            "exams_created": len(exams),
+            "student_submissions": responses_count,
+            "flagged_questions": flagged_count,
+        },
+        "recent_exams": recent_exams,
+        "recent_papers": recent_papers[:6],
+    }
+
+
 @router.get("/exam/{exam_id}/responses")
 async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
     # 1. Verify exam ownership

@@ -64,7 +64,7 @@ function FieldError({ message }: { message?: string }) {
 
 // ── Success state ─────────────────────────────────────────────────────────────
 
-function SuccessState({ name }: { name: string }) {
+function SuccessState({ name, examsBasePath }: { name: string; examsBasePath: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-6">
       <div className="rounded-full bg-emerald-950/40 p-4 border border-emerald-800/40">
@@ -78,13 +78,13 @@ function SuccessState({ name }: { name: string }) {
       </div>
       <div className="flex gap-3">
         <Link
-          href="/exams"
+          href={examsBasePath}
           className="px-4 py-2 rounded-lg text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
         >
           View all exams
         </Link>
         <Link
-          href="/exams/new"
+          href={`${examsBasePath}/new`}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-yellow-400 hover:bg-yellow-300 text-zinc-900 transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -97,7 +97,7 @@ function SuccessState({ name }: { name: string }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function ExamScheduleForm() {
+export default function ExamScheduleForm({ examsBasePath = "/exams", papersBasePath = "/papers" }: { examsBasePath?: string; papersBasePath?: string } = {}) {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [papersLoading, setPapersLoading] = useState(true);
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
@@ -210,7 +210,7 @@ export default function ExamScheduleForm() {
     setValue("start", localDatetime);
   };
 
-  if (created) return <SuccessState name={created} />;
+  if (created) return <SuccessState name={created} examsBasePath={examsBasePath} />;
 
   const inputBase =
     "w-full rounded-lg border bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:ring-2 focus:ring-yellow-500/70 focus:border-yellow-500";
@@ -266,7 +266,7 @@ export default function ExamScheduleForm() {
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3.5 py-3 space-y-1">
                 <p className="text-sm text-zinc-500">No question papers found.</p>
                 <Link
-                  href="/papers/new"
+                  href={`${papersBasePath}/new`}
                   className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
                 >
                   Create a paper first →

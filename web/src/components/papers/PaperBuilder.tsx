@@ -311,6 +311,7 @@ interface PaperBuilderProps {
   paperId?: number;
   initialData?: InitialPaperData;
   inUse?: boolean;
+  basePath?: string;
 }
 
 function buildInitialState(initialData?: InitialPaperData): BuilderState {
@@ -745,7 +746,7 @@ function NavPanel({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function PaperBuilder({ paperId, initialData, inUse = false }: PaperBuilderProps = {}) {
+export default function PaperBuilder({ paperId, initialData, inUse = false, basePath = "/papers" }: PaperBuilderProps = {}) {
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, initialData, buildInitialState);
   const [saving, setSaving] = useState(false);
@@ -999,7 +1000,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
       setSaveError(err.detail ?? "Failed to save paper.");
       return;
     }
-    router.push("/papers");
+    router.push(basePath);
   };
 
   const handleClone = async () => {
@@ -1012,7 +1013,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
     }).catch(() => null);
     setCloning(false);
     if (!res || !res.ok) { setSaveError("Failed to clone paper."); return; }
-    router.push("/papers");
+    router.push(basePath);
   };
 
   return (
@@ -1021,7 +1022,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
       {/* ── Header ──────────────────────────────────────────── */}
       <header className="flex items-center gap-4 px-5 h-14 border-b border-zinc-800 bg-zinc-900/50 shrink-0">
         <Link
-          href="/papers"
+          href={basePath}
           className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 transition-colors text-sm shrink-0"
         >
           <ArrowLeft className="w-4 h-4" />
