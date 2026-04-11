@@ -652,9 +652,9 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
         return;
       }
       void sendPolicyEvent("exam_page_exit_timeout");
-      void submitExam("manual");
+      submitExamRef.current("manual");
     }, EXAM_EXIT_GRACE_MS);
-  }, [token, examExitStorageKey, sendPolicyEvent, submitExam]);
+  }, [token, examExitStorageKey, sendPolicyEvent]);
 
   const sendHeartbeat = useCallback(async () => {
     if (!token || submitted || submitting) return;
