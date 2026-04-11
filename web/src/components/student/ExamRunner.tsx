@@ -13,6 +13,8 @@ import PolicyOverlay from "@/components/student/PolicyOverlay";
 import { ExamStructure, QuestionResponse } from "@/components/student/types";
 import { API, HEARTBEAT_INTERVAL_MS } from "@/lib/config";
 
+const EXAM_EXIT_GRACE_MS = 10_000;
+
 export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const router = useRouter();
   const questions = useMemo(() => exam.sections.flatMap((s) => s.questions), [exam.sections]);
@@ -48,6 +50,9 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const lastFullSyncAtRef = useRef(0);
   const warningCountRef = useRef(0);
   const normalModeInitLoggedRef = useRef(false);
+  const submitExamRef = useRef<(reason: "manual" | "timeup") => void>(() => {});
+  const exitWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitWatchdogArmedRef = useRef(false);
 
   const maxWarnings = Math.max(1, Number((exam.meta as ExamStructure["meta"] & { max_warnings?: number }).max_warnings ?? 3));
 
@@ -173,6 +178,71 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     };
   }, [responses, studentRoll]);
 
+  const examExitStorageKey = `wfl_exam_exit_${exam.meta.exam_id}`;
+
+  const sendPolicyEvent = useCallback(async (event: string) => {
+    if (!token) return;
+    await fetch(`${API}/response/heartbeat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-session-token": token,
+      },
+      body: JSON.stringify({
+        exam_id: exam.meta.exam_id,
+        events: [{ event }],
+        warning_count: warningCountRef.current,
+        response: {
+          student_roll: studentRoll,
+          responses: Object.values(responsesRef.current),
+        },
+      }),
+      keepalive: true,
+    }).catch(() => null);
+  }, [token, exam.meta.exam_id, studentRoll]);
+
+  const clearExitWatchdog = useCallback(() => {
+    if (exitWatchdogTimerRef.current) {
+      clearTimeout(exitWatchdogTimerRef.current);
+      exitWatchdogTimerRef.current = null;
+    }
+    exitWatchdogArmedRef.current = false;
+    try {
+      localStorage.removeItem(examExitStorageKey);
+    } catch {
+      // Ignore localStorage failures.
+    }
+  }, [examExitStorageKey]);
+
+  const armExitWatchdog = useCallback(() => {
+    if (!token || submittedRef.current || submittingRef.current) return;
+    if (exitWatchdogArmedRef.current) return;
+
+    exitWatchdogArmedRef.current = true;
+    const now = Date.now();
+    const deadline = now + EXAM_EXIT_GRACE_MS;
+    try {
+      localStorage.setItem(examExitStorageKey, JSON.stringify({ deadline, status: "pending" }));
+    } catch {
+      // Ignore localStorage failures.
+    }
+
+    void sendPolicyEvent("exam_page_exit");
+
+    exitWatchdogTimerRef.current = setTimeout(() => {
+      try {
+        const raw = localStorage.getItem(examExitStorageKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as { deadline?: number };
+        if (typeof parsed?.deadline !== "number" || Date.now() < parsed.deadline) return;
+      } catch {
+        return;
+      }
+      void sendPolicyEvent("exam_page_exit_timeout");
+      submitExamRef.current("manual");
+    }, EXAM_EXIT_GRACE_MS);
+  }, [token, examExitStorageKey, sendPolicyEvent]);
+
   const sendHeartbeat = useCallback(async () => {
     if (!token || submitted || submitting) return;
     if (heartbeatInFlightRef.current) return;
@@ -274,6 +344,12 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     router.push("/history");
   }, [token, exam.meta.exam_id, buildSubmission, router]);
 
+  useEffect(() => {
+    submitExamRef.current = (reason: "manual" | "timeup") => {
+      void submitExam(reason);
+    };
+  }, [submitExam]);
+
   const clearOutOfFocusTermination = useCallback(() => {
     if (outOfFocusTimeoutRef.current) {
       clearTimeout(outOfFocusTimeoutRef.current);
@@ -312,6 +388,26 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       return;
     }
 
+    let shouldEmitReturn = false;
+    try {
+      const raw = localStorage.getItem(examExitStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { deadline?: number };
+        if (typeof parsed?.deadline === "number") {
+          if (Date.now() <= parsed.deadline) {
+            shouldEmitReturn = true;
+          }
+        }
+      }
+    } catch {
+      // Ignore localStorage failures.
+    }
+
+    clearExitWatchdog();
+    if (shouldEmitReturn) {
+      void sendPolicyEvent("exam_page_return");
+    }
+
     void requestExamFullscreen();
 
     const warmup = setTimeout(() => {
@@ -324,8 +420,12 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
     return () => {
       clearTimeout(warmup);
       clearInterval(id);
+
+      if (!submittedRef.current && !submittingRef.current) {
+        armExitWatchdog();
+      }
     };
-  }, [token, router, sendHeartbeat, requestExamFullscreen]);
+  }, [token, router, sendHeartbeat, requestExamFullscreen, clearExitWatchdog, sendPolicyEvent, examExitStorageKey, armExitWatchdog]);
 
   useEffect(() => {
     if (!token) return;
