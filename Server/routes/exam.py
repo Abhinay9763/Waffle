@@ -175,15 +175,34 @@ def compute_score(response: dict, answers: dict, questions_data: dict) -> int:
             continue
         correct = answers[str(qid)] if str(qid) in answers else answers.get(int(qid))
         q = q_map.get(qid, {})
+        marks = int(q.get("marks", 1) or 0)
+        negative_marks = int(q.get("negative_marks", 0) or 0)
+        if marks == 0 and negative_marks == 0:
+            continue
         if chosen == correct:
-            total += q.get("marks", 1)
+            total += marks
         else:
-            total -= q.get("negative_marks", 0)
+            total -= negative_marks
 
     return max(0, total)
 
 
-def _build_live_buckets(rows: list[dict], total_questions: int) -> tuple[list[dict], list[dict], list[dict]]:
+def _countable_question_ids(questions: dict) -> set[int]:
+    ids: set[int] = set()
+    for section in questions.get("sections", []):
+        for q in section.get("questions", []):
+            qid = q.get("question_id")
+            if not isinstance(qid, int):
+                continue
+            marks = int(q.get("marks", 1) or 0)
+            negative_marks = int(q.get("negative_marks", 0) or 0)
+            if marks == 0 and negative_marks == 0:
+                continue
+            ids.add(qid)
+    return ids
+
+
+def _build_live_buckets(rows: list[dict], total_questions: int, countable_qids: set[int] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
     now = datetime.now(timezone.utc)
     active_threshold = timedelta(seconds=60)
 
@@ -210,10 +229,15 @@ def _build_live_buckets(rows: list[dict], total_questions: int) -> tuple[list[di
         if not isinstance(last_seen_raw, str):
             continue
 
-        answered = sum(
-            1 for q in (r.get("response") or {}).get("responses", [])
-            if q.get("option") is not None
-        )
+        answered = 0
+        for q in (r.get("response") or {}).get("responses", []):
+            if q.get("option") is None:
+                continue
+            if countable_qids is not None:
+                qid = q.get("question_id")
+                if not isinstance(qid, int) or qid not in countable_qids:
+                    continue
+            answered += 1
         entry = {
             "student_name": user_obj.get("name", ""),
             "student_roll": user_obj.get("roll", ""),
@@ -233,10 +257,7 @@ def _build_live_buckets(rows: list[dict], total_questions: int) -> tuple[list[di
 
 
 def _count_questions(questions: dict) -> int:
-    total = 0
-    for section in questions.get("sections", []):
-        total += len(section.get("questions", []))
-    return total
+    return len(_countable_question_ids(questions))
 
 
 async def _get_release_state_by_exam_ids(exam_ids: list[int]) -> dict[int, dict]:
@@ -870,7 +891,8 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     paper = await _get_paper_questions(exam["questionpaper_id"])
-    total_questions = _count_questions(paper["questions"]) if paper else 0
+    countable_qids = _countable_question_ids(paper["questions"]) if paper else set()
+    total_questions = len(countable_qids)
 
     resp_res = await db.client.table("Responses") \
         .select("status,last_seen_at,submitted_at,user_id,response,Users(name,roll)") \
@@ -878,7 +900,7 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
         .in_("status", ["in_progress", "submitted"]) \
         .execute()
 
-    active, idle, submitted = _build_live_buckets(resp_res.data, total_questions)
+    active, idle, submitted = _build_live_buckets(resp_res.data, total_questions, countable_qids)
 
     exam_payload = {
         **exam,
@@ -928,7 +950,8 @@ async def getExamSnapshot(
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
     paper = await _get_paper_questions(exam["questionpaper_id"])
-    total_questions = _count_questions(paper["questions"]) if paper else 0
+    countable_qids = _countable_question_ids(paper["questions"]) if paper else set()
+    total_questions = len(countable_qids)
 
     resp_res = await db.client.table("Responses") \
         .select("status,last_seen_at,submitted_at,user_id,response,Users(name,roll)") \
@@ -936,7 +959,7 @@ async def getExamSnapshot(
         .in_("status", ["in_progress", "submitted"]) \
         .execute()
 
-    active, idle, submitted = _build_live_buckets(resp_res.data, total_questions)
+    active, idle, submitted = _build_live_buckets(resp_res.data, total_questions, countable_qids)
 
     log_query = db.client.table("ExamLogs") \
         .select("event,created_at,Users(name,roll)") \

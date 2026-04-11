@@ -291,10 +291,14 @@ def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
             continue
         correct = answers.get(str(qid)) if str(qid) in answers else answers.get(int(qid))
         q = q_map.get(qid, {})
+        marks = int(q.get("marks", 1) or 0)
+        negative_marks = int(q.get("negative_marks", 0) or 0)
+        if marks == 0 and negative_marks == 0:
+            continue
         if chosen == correct:
-            total += q.get("marks", 1)
+            total += marks
         else:
-            total -= q.get("negative_marks", 0)
+            total -= negative_marks
 
     return max(0, total)
 
@@ -314,7 +318,11 @@ def _compute_total_marks_for_submission(response: dict, questions_data: dict, fa
             qid = q.get("question_id")
             if not isinstance(qid, int) or qid not in scope_ids:
                 continue
-            total += q.get("marks", 1)
+            marks = int(q.get("marks", 1) or 0)
+            negative_marks = int(q.get("negative_marks", 0) or 0)
+            if marks == 0 and negative_marks == 0:
+                continue
+            total += marks
 
     return total if total > 0 else fallback_total
 
