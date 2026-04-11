@@ -30,7 +30,7 @@ export default function QuestionPalette({
   let displayNumber = 0;
 
   return (
-    <aside className="w-64 shrink-0 border-l border-zinc-800 bg-zinc-900/30 p-4 overflow-y-auto">
+    <aside className="w-full shrink-0 border-t border-zinc-800 bg-zinc-900/30 p-4 overflow-y-auto md:w-64 md:border-l md:border-t-0">
       <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Question palette</p>
       <div className="space-y-4">
         {sections.map((section) => (

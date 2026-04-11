@@ -1162,7 +1162,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
           <ExamTimer endTime={exam.meta.end_time} onTimeUp={onTimeUp} />
         </header>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
           <section className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span>Q {activeIdx + 1} / {questions.length}</span>

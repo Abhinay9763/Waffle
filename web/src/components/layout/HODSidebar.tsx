@@ -25,6 +25,9 @@ const MOBILE_LABEL: Record<string, string> = {
   "/hod/faculty": "Faculty",
   "/hod/oversight": "System",
   "/hod/papers": "Papers",
+  "/hod/exams": "Exams",
+  "/hod/responses": "Results",
+  "/hod/queries": "Queries",
 };
 
 export default function HODSidebar() {
@@ -159,14 +162,15 @@ export default function HODSidebar() {
     </aside>
 
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-800 bg-zinc-900/95 backdrop-blur md:hidden">
-      <div className="grid grid-cols-5 gap-1 px-2 py-2">
-        {NAV.slice(0, 5).map((item) => {
+      <div className="overflow-x-auto px-2 py-2">
+        <div className="flex min-w-max items-stretch gap-1">
+        {NAV.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] transition-colors ${
+              className={`flex min-w-17.5 flex-col items-center gap-1 rounded-lg px-2 py-2 text-[10px] transition-colors ${
                 isActive ? "text-yellow-300 bg-yellow-500/10" : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -175,6 +179,7 @@ export default function HODSidebar() {
             </Link>
           );
         })}
+        </div>
       </div>
     </nav>
     </>

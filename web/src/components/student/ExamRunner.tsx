@@ -682,22 +682,22 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
           <ExamTimer endTime={exam.meta.end_time} onTimeUp={onTimeUp} />
         </header>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
           <section className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span>Q {activeIdx + 1} / {questions.length}</span>
-              <span>ΓÇó</span>
+              <span>&bull;</span>
               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-800/60 bg-emerald-950/20 px-1.5 py-0.5 text-emerald-300">
                 +{active.marks}
               </span>
               <span className="inline-flex items-center gap-1 rounded-md border border-red-800/60 bg-red-950/20 px-1.5 py-0.5 text-red-300">
                 -{active.negative_marks}
               </span>
-              <span>ΓÇó</span>
+              <span>&bull;</span>
               <span>{answeredCount} answered</span>
-              <span>ΓÇó</span>
+              <span>&bull;</span>
               <span>{markedCount} marked</span>
-              <span>ΓÇó</span>
+              <span>&bull;</span>
               <span className="text-amber-400">Warnings {warningCount}/{maxWarnings}</span>
             </div>
 

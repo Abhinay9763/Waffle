@@ -13,8 +13,8 @@ export default async function StudentExamPage({
   const { examId } = await params;
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-3xl items-center px-6 py-10">
-      <div className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 shadow-lg shadow-black/30">
+    <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-3xl items-center px-4 py-6 sm:px-6 sm:py-10">
+      <div className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-8 shadow-lg shadow-black/30">
         <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Exam Mode</p>
         <h1 className="mt-2 text-2xl font-semibold text-zinc-100">Choose how you want to take this exam</h1>
         <p className="mt-3 text-sm text-zinc-400">
