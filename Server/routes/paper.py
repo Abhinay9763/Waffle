@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
@@ -21,6 +22,10 @@ from config import DOCX_TEMPLATE_ANCHOR_TEXT, PAPER_DOCX_TEMPLATE_NAME
 router = APIRouter()
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "template"
 PAPER_DOCX_TEMPLATE = TEMPLATE_DIR / PAPER_DOCX_TEMPLATE_NAME
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _normalize_option(value) -> int | None:
@@ -447,8 +452,10 @@ async def listPapers(user=Depends(get_current_user)):
     paper_ids = [p["id"] for p in response.data]
     in_use_ids: set[int] = set()
     if paper_ids:
+        now_iso = _now_iso()
         exam_res = await db.client.table("Exams") \
             .select("questionpaper_id") \
+            .gte("end", now_iso) \
             .in_("questionpaper_id", paper_ids) \
             .execute()
         in_use_ids = {row["questionpaper_id"] for row in exam_res.data}
@@ -485,9 +492,11 @@ async def getPaper(paper_id: int, user=Depends(get_current_user)):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
 
     paper = paper_res.data[0]
+    now_iso = _now_iso()
     exam_res = await db.client.table("Exams") \
         .select("id") \
         .eq("questionpaper_id", paper_id) \
+        .gte("end", now_iso) \
         .limit(1) \
         .execute()
     paper["in_use"] = len(exam_res.data) > 0
@@ -504,9 +513,11 @@ async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_curr
     if not existing.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
 
+    now_iso = _now_iso()
     exam_res = await db.client.table("Exams") \
         .select("id") \
         .eq("questionpaper_id", paper_id) \
+        .gte("end", now_iso) \
         .limit(1) \
         .execute()
     if exam_res.data:
@@ -530,7 +541,13 @@ async def deletePaper(paper_id: int, user=Depends(get_current_user)):
     if not existing.data:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Paper not found.")
 
-    exam_res = await db.client.table("Exams").select("id").eq("questionpaper_id", paper_id).limit(1).execute()
+    now_iso = _now_iso()
+    exam_res = await db.client.table("Exams") \
+        .select("id") \
+        .eq("questionpaper_id", paper_id) \
+        .gte("end", now_iso) \
+        .limit(1) \
+        .execute()
     if exam_res.data:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Paper is in use by an exam and cannot be deleted.")
 

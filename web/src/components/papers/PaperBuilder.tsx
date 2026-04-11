@@ -132,6 +132,19 @@ function makeQ(id: number): BuilderQuestion {
   return { question_id: id, text: "", options: [{ text: "" }, { text: "" }, { text: "" }, { text: "" }], correct_option: null, marks: 1, negative_marks: 0 };
 }
 
+function getClipboardImageFile(event: React.ClipboardEvent<HTMLTextAreaElement>): File | null {
+  const items = event.clipboardData?.items;
+  if (!items) return null;
+
+  for (const item of Array.from(items)) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) return file;
+    }
+  }
+  return null;
+}
+
 // ── Reducer ────────────────────────────────────────────────────────────────────
 
 function reducer(state: BuilderState, action: Action): BuilderState {
@@ -326,11 +339,12 @@ function buildInitialState(initialData?: InitialPaperData): BuilderState {
 // ── Option row ─────────────────────────────────────────────────────────────────
 
 function OptionRow({
-  letter, value, isCorrect, onChange, onMarkCorrect, onUploadImage, onRemoveImage, uploading, readonly, optIdx,
+  letter, value, isCorrect, onChange, onMarkCorrect, onUploadImage, onPasteImage, onRemoveImage, uploading, readonly, optIdx,
 }: {
   letter: string; value: OptionValue; isCorrect: boolean; readonly?: boolean;
   onChange: (v: string) => void; onMarkCorrect: () => void;
   onUploadImage: (file: File) => Promise<void>; onRemoveImage: () => void;
+  onPasteImage: (file: File) => Promise<void>;
   uploading: boolean; optIdx: number;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -356,6 +370,13 @@ function OptionRow({
         <textarea
           value={value.text}
           onChange={e => onChange(e.target.value)}
+          onPaste={async (e) => {
+            if (readonly) return;
+            const image = getClipboardImageFile(e);
+            if (!image) return;
+            e.preventDefault();
+            await onPasteImage(image);
+          }}
           placeholder={`Option ${letter}`}
           rows={1}
           readOnly={readonly}
@@ -427,13 +448,15 @@ function OptionRow({
 // ── Question editor ────────────────────────────────────────────────────────────
 
 function QuestionEditor({
-  q, displayIdx, total, dispatch, readonly, onUploadQImage, onRemoveQImage, onUploadOptImage, onRemoveOptImage, uploadingSlot,
+  q, displayIdx, total, dispatch, readonly, onUploadQImage, onPasteQImage, onRemoveQImage, onUploadOptImage, onPasteOptImage, onRemoveOptImage, uploadingSlot,
 }: {
   q: BuilderQuestion; displayIdx: number; total: number;
   dispatch: React.Dispatch<Action>; readonly?: boolean;
   onUploadQImage: (file: File) => Promise<void>;
+  onPasteQImage: (file: File) => Promise<void>;
   onRemoveQImage: () => void;
   onUploadOptImage: (idx: number, file: File) => Promise<void>;
+  onPasteOptImage: (idx: number, file: File) => Promise<void>;
   onRemoveOptImage: (idx: number) => void;
   uploadingSlot: string | null;
 }) {
@@ -464,6 +487,13 @@ function QuestionEditor({
         <textarea
           value={q.text}
           onChange={e => dispatch({ type: "UPDATE_Q_TEXT", text: e.target.value })}
+          onPaste={async (e) => {
+            if (readonly) return;
+            const image = getClipboardImageFile(e);
+            if (!image) return;
+            e.preventDefault();
+            await onPasteQImage(image);
+          }}
           placeholder="Type the question here…"
           rows={3}
           readOnly={readonly}
@@ -537,6 +567,7 @@ function QuestionEditor({
             onChange={text => dispatch({ type: "UPDATE_OPTION", idx, text })}
             onMarkCorrect={() => dispatch({ type: "SET_CORRECT", idx })}
             onUploadImage={(file) => onUploadOptImage(idx, file)}
+            onPasteImage={(file) => onPasteOptImage(idx, file)}
             onRemoveImage={() => onRemoveOptImage(idx)}
             uploading={uploadingSlot === `o-${idx}`}
             readonly={readonly}
@@ -818,6 +849,10 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
     setUploadingSlot(null);
   };
 
+  const handlePasteQImage = async (file: File) => {
+    await handleUploadQImage(file);
+  };
+
   const handleUploadOptImage = async (idx: number, file: File) => {
     setUploadingSlot(`o-${idx}`);
     try {
@@ -825,6 +860,10 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
       dispatch({ type: "SET_OPTION_IMAGE", optIdx: idx as 0 | 1 | 2 | 3, url });
     } catch { setSaveError("Image upload failed."); }
     setUploadingSlot(null);
+  };
+
+  const handlePasteOptImage = async (idx: number, file: File) => {
+    await handleUploadOptImage(idx, file);
   };
   // ── End image upload ─────────────────────────────────────────────────────
 
@@ -1045,6 +1084,12 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
         </div>
       </header>
 
+      {inUse && (
+        <div className="mx-5 mt-4 rounded-lg border border-amber-800/60 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
+          This paper is scheduled or currently in use by an exam and cannot be edited.
+        </div>
+      )}
+
       {/* ── Main split ──────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
 
@@ -1056,8 +1101,10 @@ export default function PaperBuilder({ paperId, initialData, inUse = false }: Pa
             dispatch={dispatch}
             readonly={inUse}
             onUploadQImage={handleUploadQImage}
+            onPasteQImage={handlePasteQImage}
             onRemoveQImage={() => dispatch({ type: "SET_QUESTION_IMAGE", url: undefined })}
             onUploadOptImage={handleUploadOptImage}
+            onPasteOptImage={handlePasteOptImage}
             onRemoveOptImage={(idx) => dispatch({ type: "SET_OPTION_IMAGE", optIdx: idx as 0 | 1 | 2 | 3, url: undefined })}
             uploadingSlot={uploadingSlot}
           />
