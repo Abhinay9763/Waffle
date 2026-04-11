@@ -4,7 +4,7 @@ import type { ChangeEvent } from "react";
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
-import { Download, FileDown, FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
+import { Copy, Download, FileDown, FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { API, PAPER_TEMPLATE_FILE } from "@/lib/config";
 
@@ -58,6 +58,7 @@ export default function PapersPage() {
   const [loading, setLoading] = useState(true);
   const [downloadingDocId, setDownloadingDocId] = useState<number | null>(null);
   const [downloadingXlsxId, setDownloadingXlsxId] = useState<number | null>(null);
+  const [cloningId, setCloningId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
 
@@ -117,6 +118,27 @@ export default function PapersPage() {
       return;
     }
     setPapers(prev => prev.filter(p => p.id !== paper.id));
+  };
+
+  const handleClone = async (paper: Paper) => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token || cloningId !== null) return;
+
+    setCloningId(paper.id);
+    const res = await fetch(`${API}/paper/${paper.id}/clone`, {
+      method: "POST",
+      headers: { "x-session-token": token },
+    }).catch(() => null);
+    setCloningId(null);
+
+    if (!res?.ok) {
+      const body = await res?.json().catch(() => ({}));
+      toast.error(body?.detail ?? "Failed to clone paper.");
+      return;
+    }
+
+    toast.success("Paper cloned.");
+    await loadPapers();
   };
 
   const handleImport = async (file: File) => {
@@ -329,6 +351,17 @@ export default function PapersPage() {
                 >
                   View
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => void handleClone(paper)}
+                  disabled={cloningId !== null}
+                  className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-indigo-300 border border-zinc-700 hover:border-indigo-700 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {cloningId === paper.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Copy className="w-3.5 h-3.5" />}
+                  {cloningId === paper.id ? "Cloning…" : "Clone"}
+                </button>
                 <Link
                   href={`/exams/new?paper=${paper.id}`}
                   className="text-xs text-zinc-500 hover:text-yellow-400 border border-zinc-700 hover:border-yellow-600 px-2.5 py-1 rounded-lg transition-colors"

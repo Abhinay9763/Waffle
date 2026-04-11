@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { getCookie } from "cookies-next";
-import { ArrowLeft, Flag, Loader2, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Flag, Loader2, X } from "lucide-react";
 import { API } from "@/lib/config";
 
 type OptionValue = string | { text: string; image_url?: string };
@@ -124,6 +124,12 @@ export default function ResponseDetailPage() {
     () => flatQuestions.find((q) => q.question_id === activeQuestionId) ?? null,
     [flatQuestions, activeQuestionId],
   );
+  const activeQuestionIndex = useMemo(
+    () => flatQuestions.findIndex((q) => q.question_id === activeQuestionId),
+    [flatQuestions, activeQuestionId],
+  );
+  const canGoPrev = activeQuestionIndex > 0;
+  const canGoNext = activeQuestionIndex >= 0 && activeQuestionIndex < flatQuestions.length - 1;
 
   const submitFlag = async () => {
     if (!activeQuestion) return;
@@ -310,13 +316,35 @@ export default function ResponseDetailPage() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
           <section className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
-            <div className="mb-3 md:hidden">
+            <div className="mb-3 flex flex-wrap items-center gap-2 md:hidden">
               <button
                 type="button"
                 onClick={() => setMobilePaletteOpen(true)}
                 className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300"
               >
                 Question Nav
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canGoPrev) return;
+                  setActiveQuestionId(flatQuestions[activeQuestionIndex - 1].question_id);
+                }}
+                disabled={!canGoPrev}
+                className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canGoNext) return;
+                  setActiveQuestionId(flatQuestions[activeQuestionIndex + 1].question_id);
+                }}
+                disabled={!canGoNext}
+                className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
             {!activeQuestion ? (
