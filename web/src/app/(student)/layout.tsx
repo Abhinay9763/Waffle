@@ -14,7 +14,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   return (
     <div className="flex h-screen bg-zinc-950 overflow-hidden">
       <StudentSidebar />
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">{children}</main>
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden pb-20 md:pb-0">{children}</main>
     </div>
   );
 }

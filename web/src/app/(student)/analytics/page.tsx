@@ -112,7 +112,7 @@ export default function AnalyticsPage() {
         <h1 className="text-xl font-semibold text-zinc-100">Analytics</h1>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <StatCard label="Exams taken"    value={responses.length} />
           <StatCard label="Average score"  value={`${avg}%`} />
           <StatCard label="Best score"     value={`${best}%`} sub={bestExam?.exam_name} />

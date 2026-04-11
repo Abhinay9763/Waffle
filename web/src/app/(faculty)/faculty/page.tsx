@@ -101,7 +101,7 @@ export default function FacultyDashboard() {
     if (!stats) return [];
     return [
       {
-        label: "Question Papers Created",
+        label: "Question Papers",
         value: stats.question_papers_created,
         icon: FileText,
       },
@@ -160,12 +160,12 @@ export default function FacultyDashboard() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-10 space-y-8">
+      <div className="px-4 py-6 sm:px-8 sm:py-10 space-y-8">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <p className="text-xs uppercase tracking-wider text-zinc-500">Faculty Dashboard</p>
           <h1 className="mt-2 text-2xl font-semibold text-zinc-100">Welcome back, {data.faculty_name}</h1>
           <p className="mt-2 text-sm text-zinc-400">{todayLabel()}</p>
-          <div className="mt-5 flex gap-2">
+          <div className="mt-5 flex flex-wrap gap-2">
             <Link
               href="/papers/new"
               className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:bg-zinc-700"
@@ -181,7 +181,7 @@ export default function FacultyDashboard() {
           </div>
         </section>
 
-        <section className="grid grid-cols-5 gap-3">
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
           {statCards.map((card) => (
             <div key={card.label} className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
               <div className="flex items-center justify-between">
@@ -193,7 +193,7 @@ export default function FacultyDashboard() {
           ))}
         </section>
 
-        <section className="grid grid-cols-2 gap-4">
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-100">Recent Exams</h2>

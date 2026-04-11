@@ -389,7 +389,7 @@ function OptionRow({
             el.style.height = "auto";
             el.style.height = `${el.scrollHeight}px`;
           }}
-          className="bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 resize-none outline-none leading-relaxed min-h-[28px] read-only:cursor-default"
+          className="bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 resize-none outline-none leading-relaxed min-h-7 read-only:cursor-default"
         />
         {value.image_url && (
           <div className="relative inline-block">
@@ -1027,7 +1027,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
     <div className="flex flex-col h-full bg-zinc-950">
 
       {/* ── Header ──────────────────────────────────────────── */}
-      <header className="flex items-center gap-4 px-5 h-14 border-b border-zinc-800 bg-zinc-900/50 shrink-0">
+      <header className="flex flex-wrap items-center gap-2 sm:gap-4 px-3 sm:px-5 min-h-14 py-2 border-b border-zinc-800 bg-zinc-900/50 shrink-0">
         <Link
           href={basePath}
           className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 transition-colors text-sm shrink-0"
@@ -1036,7 +1036,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
           Papers
         </Link>
 
-        <div className="h-5 w-px bg-zinc-800 shrink-0" />
+        <div className="hidden sm:block h-5 w-px bg-zinc-800 shrink-0" />
 
         <input
           value={state.examName}
@@ -1046,7 +1046,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
           className="flex-1 bg-transparent text-sm font-medium text-zinc-200 placeholder:text-zinc-600 outline-none min-w-0 read-only:cursor-default"
         />
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0 sm:ml-auto">
           {isReadOnly && (
             <span className="flex items-center gap-1.5 text-xs text-amber-500 border border-amber-800/50 bg-amber-950/20 rounded-lg px-2.5 py-1">
               <Lock className="w-3 h-3" />
@@ -1111,7 +1111,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
       )}
 
       {/* ── Main split ──────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
 
         {activeQ ? (
           <QuestionEditor
@@ -1146,9 +1146,9 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
       </div>
 
       {/* ── Bottom bar ──────────────────────────────────────── */}
-      <footer className="flex items-center justify-between px-5 h-14 border-t border-zinc-800 bg-zinc-900/50 shrink-0">
+      <footer className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 min-h-14 py-2 border-t border-zinc-800 bg-zinc-900/50 shrink-0">
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!isReadOnly && !keyOnlyMode && (
             <>
               <button
@@ -1209,7 +1209,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           <button
             type="button"
             onClick={() => dispatch({ type: "PREV" })}

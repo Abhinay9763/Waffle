@@ -1025,7 +1025,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100">
       {showLeavePrompt && (
-        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-zinc-950/85 px-6 text-center">
+        <div className="fixed inset-0 z-55 flex items-center justify-center bg-zinc-950/85 px-6 text-center">
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
             <h2 className="text-lg font-semibold text-zinc-100">Leave exam?</h2>
             <p className="mt-2 text-sm text-zinc-400">
@@ -1055,7 +1055,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
         </div>
       )}
       {showSubmitPrompt && (
-        <div className="fixed inset-0 z-[56] flex items-center justify-center bg-zinc-950/85 px-6 text-center">
+        <div className="fixed inset-0 z-56 flex items-center justify-center bg-zinc-950/85 px-6 text-center">
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
             <h2 className="text-lg font-semibold text-zinc-100">Submit exam?</h2>
             <p className="mt-2 text-sm text-zinc-400">
@@ -1088,7 +1088,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
         </div>
       )}
       {!isFullscreen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/95 px-6 text-center">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-zinc-950/95 px-6 text-center">
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
             <p className="text-xs font-semibold uppercase tracking-wider text-yellow-400">Exam security</p>
             <h2 className="mt-2 text-lg font-semibold text-zinc-100">Fullscreen required</h2>
@@ -1115,7 +1115,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       <PolicyOverlay lockSeconds={lockSeconds} reason={lockReason} warningCount={warningCount} maxWarnings={maxWarnings} />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/60 px-5 py-3">
+        <header className="flex flex-wrap items-center gap-2 sm:gap-3 border-b border-zinc-800 bg-zinc-900/60 px-3 py-3 sm:px-5">
           <button
             type="button"
             onClick={onBackClick}
@@ -1125,7 +1125,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
-          <div className="h-5 w-px bg-zinc-800" />
+          <div className="hidden h-5 w-px bg-zinc-800 sm:block" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-zinc-100">{exam.meta.exam_name}</h1>
             <p className="text-xs text-zinc-500">
@@ -1133,7 +1133,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
               {hiddenQuestionCount > 0 ? ` (${hiddenQuestionCount} image question${hiddenQuestionCount === 1 ? "" : "s"} excluded in blind mode)` : ""}
             </p>
           </div>
-          <div className="hidden min-w-37.5 text-right text-[11px] text-zinc-500 sm:block">
+          <div className="hidden min-w-37.5 text-right text-[11px] text-zinc-500 lg:block">
             {autosaveState === "saving" && <span>Saving...</span>}
             {autosaveState === "saved" && <span>Saved {lastSavedAt ? `at ${lastSavedAt}` : ""}</span>}
             {autosaveState === "error" && <span className="text-amber-400">Autosave failed</span>}
@@ -1163,8 +1163,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <section className="min-w-0 flex-1 overflow-y-auto p-6">
-            <div className="mb-4 flex items-center gap-2 text-xs text-zinc-500">
+          <section className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span>Q {activeIdx + 1} / {questions.length}</span>
               <span>•</span>
               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-800/60 bg-emerald-950/20 px-1.5 py-0.5 text-emerald-300">
@@ -1207,7 +1207,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
               >
                 <Flag className="h-3.5 w-3.5" /> {activeResponse?.marked ? "Marked" : "Mark review"}
               </button>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-0 flex w-full items-center justify-end gap-2 sm:ml-auto sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setActiveIdx((v) => Math.max(0, v - 1))}

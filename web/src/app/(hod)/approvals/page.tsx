@@ -72,7 +72,7 @@ export default function FacultyApprovals() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-10 space-y-6">
+      <div className="px-4 py-6 sm:px-8 sm:py-10 space-y-6">
 
         {/* Header */}
         <div className="space-y-1">
@@ -104,7 +104,7 @@ export default function FacultyApprovals() {
               {pendingFaculty.map((faculty) => (
                 <div
                   key={faculty.id}
-                  className="flex items-center gap-4 p-6 rounded-xl border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors"
+                  className="flex flex-col items-stretch gap-4 p-4 sm:p-6 rounded-xl border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors sm:flex-row sm:items-center"
                 >
                   {/* Faculty Info */}
                   <div className="flex-1 min-w-0">
@@ -118,7 +118,7 @@ export default function FacultyApprovals() {
                         <h3 className="text-sm font-medium text-zinc-200 truncate">
                           {faculty.name}
                         </h3>
-                        <div className="flex items-center gap-3 text-xs text-zinc-500">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-zinc-500">
                           <div className="flex items-center gap-1">
                             <Mail className="w-3 h-3" />
                             {faculty.email}
@@ -133,11 +133,11 @@ export default function FacultyApprovals() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 sm:self-center">
                     <button
                       onClick={() => handleApproval(faculty.id, 'approve')}
                       disabled={processingId === faculty.id}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-green-50 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-green-50 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {processingId === faculty.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -149,7 +149,7 @@ export default function FacultyApprovals() {
                     <button
                       onClick={() => handleApproval(faculty.id, 'reject')}
                       disabled={processingId === faculty.id}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-red-50 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-red-50 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {processingId === faculty.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />

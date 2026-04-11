@@ -36,7 +36,7 @@ export default function QuestionPalette({
         {sections.map((section) => (
           <div key={section.section_id} className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{section.name}</p>
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
               {section.questions.map((question) => {
                 displayNumber += 1;
                 const r = responses[question.question_id];

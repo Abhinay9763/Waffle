@@ -222,7 +222,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-xl mx-auto px-6 py-10 space-y-8">
+      <div className="max-w-xl mx-auto px-4 py-6 sm:px-6 sm:py-10 space-y-8">
 
         {/* Header */}
         <div className="space-y-1">
@@ -261,7 +261,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
             <Label htmlFor="questionpaper_id">Question paper</Label>
 
             {papersLoading ? (
-              <div className="h-[42px] rounded-lg border border-zinc-800 bg-zinc-900 flex items-center px-3.5 gap-2 text-sm text-zinc-600">
+              <div className="h-10.5 rounded-lg border border-zinc-800 bg-zinc-900 flex items-center px-3.5 gap-2 text-sm text-zinc-600">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 Loading papers…
               </div>
@@ -302,7 +302,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
           </div>
 
           {/* Time window */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="start">Start time</Label>
@@ -371,7 +371,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
             <Label htmlFor="join_window">
               Join window <span className="text-zinc-600 font-normal">(optional)</span>
             </Label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 id="join_window"
                 type="number"
@@ -403,7 +403,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
             {/* Audience sections */}
             <div className="space-y-1.5">
               <Label>Audience</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setValue("audience_mode", "all", { shouldValidate: true })}
@@ -425,7 +425,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
                   {sectionOptions.length === 0 ? (
                     <p className="text-xs text-zinc-500">No section presets found. Add them in dataset mapping.</p>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {sectionOptions.map((section) => {
                         const checked = selectedSections.includes(section);
                         return (

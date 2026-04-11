@@ -142,13 +142,13 @@ export default function FacultyQueriesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-10 space-y-8">
+      <div className="px-4 py-6 sm:px-8 sm:py-10 space-y-8">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <p className="text-xs uppercase tracking-wider text-zinc-500">Question Queries</p>
           <h1 className="mt-2 text-2xl font-semibold text-zinc-100">Student query inbox</h1>
           <p className="mt-2 text-sm text-zinc-400">Review flagged questions and send clarifications.</p>
 
-          <div className="mt-5 grid grid-cols-3 gap-3">
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
               <p className="text-xs text-zinc-500">Total</p>
               <p className="mt-1 text-xl font-semibold text-zinc-100">{summary.total}</p>

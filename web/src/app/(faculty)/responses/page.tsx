@@ -75,7 +75,7 @@ export default function ResponsesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-10 space-y-3">
+      <div className="px-4 py-6 sm:px-8 sm:py-10 space-y-3">
 
         <div className="space-y-1 mb-6">
           <h1 className="text-xl font-semibold text-zinc-100">Results</h1>

@@ -61,7 +61,7 @@ export default function HodResponsesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-10 space-y-6">
+      <div className="px-4 py-6 sm:px-8 sm:py-10 space-y-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold text-zinc-100">Exam Results</h1>
           <p className="text-sm text-zinc-500">Review responses by exam</p>

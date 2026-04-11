@@ -250,7 +250,7 @@ export default function PapersPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-10 space-y-6">
+      <div className="px-4 py-6 sm:px-8 sm:py-10 space-y-6">
 
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-0.5">

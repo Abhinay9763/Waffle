@@ -71,15 +71,15 @@ export default function HistoryPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-6 py-10 space-y-6">
+      <div className="max-w-3xl mx-auto px-4 py-6 sm:px-6 sm:py-10 space-y-6">
 
         <div className="space-y-1">
           <h1 className="text-xl font-semibold text-zinc-100">My Results</h1>
           <p className="text-sm text-zinc-500">{responses.length} exam{responses.length !== 1 ? "s" : ""} taken</p>
         </div>
 
-        <div className="rounded-xl border border-zinc-800 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-xl border border-zinc-800 overflow-hidden overflow-x-auto">
+          <table className="w-full min-w-160 text-sm">
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900">
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500">Exam</th>

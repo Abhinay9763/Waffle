@@ -159,11 +159,11 @@ export default function ResponsesView({ examId, basePath = "/responses" }: { exa
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-10 space-y-8">
+      <div className="px-4 py-6 sm:px-8 sm:py-10 space-y-6 sm:space-y-8">
 
         {/* Back + header */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Link
               href={basePath}
               className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -219,8 +219,8 @@ export default function ResponsesView({ examId, basePath = "/responses" }: { exa
             <p className="text-sm text-zinc-500">No submissions yet.</p>
           </div>
         ) : (
-          <div className="rounded-xl border border-zinc-800 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-xl border border-zinc-800 overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-180 text-sm">
               <thead>
                 <tr className="border-b border-zinc-800 bg-zinc-900">
                   <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 w-10">#</th>

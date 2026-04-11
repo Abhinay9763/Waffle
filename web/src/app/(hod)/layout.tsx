@@ -8,7 +8,7 @@ export default function HODLayout({
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950">
       <HODSidebar />
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden pb-20 md:pb-0">
         {children}
       </main>
     </div>

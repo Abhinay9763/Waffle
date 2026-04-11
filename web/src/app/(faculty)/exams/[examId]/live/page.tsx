@@ -305,7 +305,7 @@ export default function LiveControlCentre() {
       />
 
       {/* Header */}
-      <div className="shrink-0 px-8 py-5 border-b border-zinc-800 flex items-center gap-4">
+      <div className="shrink-0 px-4 py-4 sm:px-8 sm:py-5 border-b border-zinc-800 flex flex-wrap items-center gap-2 sm:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5">
             <Radio className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -314,7 +314,7 @@ export default function LiveControlCentre() {
           </div>
           <p className="text-xs text-zinc-500 mt-0.5 pl-6.5">{timeLeft(exam.end)}</p>
         </div>
-        <div className="flex items-center gap-4 text-xs text-zinc-500 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-zinc-500 shrink-0 sm:ml-auto">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
             {active.length} active
@@ -351,10 +351,10 @@ export default function LiveControlCentre() {
       </div>
 
       {/* Body — two columns */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
 
         {/* Left: student lists */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8 border-r border-zinc-800">
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6 space-y-6 sm:space-y-8 md:border-r md:border-zinc-800">
 
           {/* Active */}
           <Section
@@ -436,7 +436,7 @@ export default function LiveControlCentre() {
         </div>
 
         {/* Right: event log */}
-        <div className="w-72 shrink-0 overflow-y-auto px-5 py-6">
+        <div className="w-full shrink-0 overflow-y-auto border-t border-zinc-800 px-4 py-4 sm:px-5 sm:py-6 md:w-72 md:border-l md:border-t-0">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-4">
             Event log
           </p>

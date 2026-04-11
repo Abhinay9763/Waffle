@@ -58,10 +58,10 @@ function ExamRow({ exam, onRelease, releasing, onDelete, deleting }: {
   const status = statusOf(exam.start, exam.end);
   const canReleaseNow = status === "ended" && !exam.responses_released;
   return (
-    <div className="flex items-center gap-4 px-4 py-3.5 hover:bg-zinc-800/30 transition-colors">
+    <div className="flex flex-col items-stretch gap-3 px-4 py-3.5 hover:bg-zinc-800/30 transition-colors sm:flex-row sm:items-center sm:gap-4">
       <div className="flex-1 min-w-0 space-y-0.5">
         <p className="text-sm font-medium text-zinc-200 truncate">{exam.name}</p>
-        <div className="flex items-center gap-3 text-xs text-zinc-600">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-zinc-600">
           <span className="flex items-center gap-1">
             <CalendarDays className="w-3 h-3" />
             {fmtDatetime(exam.start)}
@@ -75,9 +75,10 @@ function ExamRow({ exam, onRelease, releasing, onDelete, deleting }: {
           )}
         </div>
       </div>
-      <span className={`shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded border ${STATUS_STYLE[status]}`}>
+      <span className={`self-start sm:self-auto shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded border ${STATUS_STYLE[status]}`}>
         {STATUS_LABEL[status]}
       </span>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-2 sm:ml-auto">
       {status === "live" && (
         <Link
           href={`/exams/${exam.id}/live`}
@@ -124,6 +125,7 @@ function ExamRow({ exam, onRelease, releasing, onDelete, deleting }: {
           {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
         </button>
       )}
+      </div>
     </div>
   );
 }
@@ -222,9 +224,9 @@ export default function ExamsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-10 space-y-6">
+      <div className="px-4 py-6 sm:px-8 sm:py-10 space-y-6">
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="space-y-0.5">
             <h1 className="text-xl font-semibold text-zinc-100">Exams</h1>
             <p className="text-sm text-zinc-500">{exams.length} exam{exams.length !== 1 ? "s" : ""}</p>

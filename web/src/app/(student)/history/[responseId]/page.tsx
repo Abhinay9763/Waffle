@@ -196,7 +196,7 @@ export default function ResponseDetailPage() {
       {showFlagModal && activeQuestion && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-zinc-950/90 px-6">
           <div className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-            <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-zinc-100">Flag Question {flatQuestions.findIndex((q) => q.question_id === activeQuestion.question_id) + 1}</h2>
               <button
                 type="button"
@@ -278,14 +278,14 @@ export default function ResponseDetailPage() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/60 px-5 py-3">
+        <header className="flex flex-wrap items-center gap-2 sm:gap-3 border-b border-zinc-800 bg-zinc-900/60 px-3 py-3 sm:px-5">
           <Link
             href="/history"
             className="inline-flex items-center gap-1.5 text-xs text-zinc-400 transition hover:text-zinc-200"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
-          <div className="h-5 w-px bg-zinc-800" />
+          <div className="hidden h-5 w-px bg-zinc-800 sm:block" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-zinc-100">{data.exam_name}</h1>
             <p className="text-xs text-zinc-500">Submitted {fmtDateTime(data.submitted_at)}</p>
@@ -307,8 +307,8 @@ export default function ResponseDetailPage() {
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <section className="min-w-0 flex-1 overflow-y-auto p-6">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+          <section className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
             {!activeQuestion ? (
               <p className="text-sm text-zinc-500">No questions found in this response.</p>
             ) : (
@@ -369,13 +369,13 @@ export default function ResponseDetailPage() {
             )}
           </section>
 
-          <aside className="w-72 shrink-0 overflow-y-auto border-l border-zinc-800 bg-zinc-900/30 p-4">
+          <aside className="w-full shrink-0 overflow-y-auto border-t border-zinc-800 bg-zinc-900/30 p-4 lg:w-72 lg:border-l lg:border-t-0">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Question palette</p>
             <div className="space-y-4">
               {data.sections.map((section) => (
                 <div key={section.section_id} className="space-y-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{section.name}</p>
-                  <div className="grid grid-cols-5 gap-1.5">
+                  <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
                     {section.questions.map((q, idx) => {
                       const displayNum = data.sections
                         .flatMap((s) => s.questions)

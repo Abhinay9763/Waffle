@@ -79,7 +79,7 @@ export default function StudentSidebar() {
   // Show loading state while authenticating
   if (isAuthenticating) {
     return (
-      <aside className="flex flex-col w-56 h-screen bg-zinc-900 border-r border-zinc-800 shrink-0">
+      <aside className="hidden md:flex flex-col w-56 h-screen bg-zinc-900 border-r border-zinc-800 shrink-0">
         <div className="flex items-center justify-center h-full">
           <Loader2 className="w-6 h-6 animate-spin text-zinc-600" />
         </div>
@@ -88,7 +88,8 @@ export default function StudentSidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-56 h-screen bg-zinc-900 border-r border-zinc-800 shrink-0">
+    <>
+    <aside className="hidden md:flex flex-col w-56 h-screen bg-zinc-900 border-r border-zinc-800 shrink-0">
 
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 h-20 border-b border-zinc-800 shrink-0">
@@ -141,5 +142,26 @@ export default function StudentSidebar() {
       </div>
 
     </aside>
+
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-800 bg-zinc-900/95 backdrop-blur md:hidden">
+      <div className="grid grid-cols-4 gap-1 px-2 py-2">
+        {NAV.map(({ label, href, icon: Icon }) => {
+          const active = pathname === href || pathname.startsWith(href + "/");
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] transition-colors ${
+                active ? "text-yellow-300 bg-yellow-500/10" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="truncate">{label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+    </>
   );
 }
