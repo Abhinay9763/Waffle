@@ -955,3 +955,88 @@ async def getMyQuestionQueries(user=Depends(get_current_user)):
             "answered": answered,
         },
     }
+
+
+@router.get("/response/queries/hod-solved", status_code=HTTP_200_OK)
+async def getHodSolvedQuestionQueries(user=Depends(get_current_user)):
+    """HOD view of solved (answered) student question queries only."""
+    if user.get("role") != "HOD":
+        raise HTTPException(status_code=403, detail="Only HOD can view solved queries.")
+
+    rows = []
+    try:
+        res = await db.client.table("FlaggedQuestions") \
+            .select("id,student_id,faculty_id,payload,created_at") \
+            .order("created_at", desc=True) \
+            .execute()
+        rows = res.data or []
+    except Exception:
+        try:
+            res = await db.client.table("flagged_questions") \
+                .select("id,student_id,faculty_id,payload,created_at") \
+                .order("created_at", desc=True) \
+                .execute()
+            rows = res.data or []
+        except Exception:
+            rows = []
+
+    rows = [
+        r for r in rows
+        if isinstance(r.get("payload"), dict) and str((r.get("payload") or {}).get("faculty_response") or "").strip()
+    ]
+
+    user_ids = set()
+    for r in rows:
+        sid = r.get("student_id")
+        fid = r.get("faculty_id")
+        if isinstance(sid, int):
+            user_ids.add(sid)
+        if isinstance(fid, int):
+            user_ids.add(fid)
+
+    user_by_id: dict[int, dict] = {}
+    if user_ids:
+        users_res = await db.client.table("Users") \
+            .select("id,name,roll") \
+            .in_("id", list(user_ids)) \
+            .execute()
+        user_by_id = {u["id"]: u for u in (users_res.data or []) if isinstance(u.get("id"), int)}
+
+    items = []
+    for row in rows:
+        payload = row.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        student_id = row.get("student_id") if isinstance(row.get("student_id"), int) else None
+        faculty_id = row.get("faculty_id") if isinstance(row.get("faculty_id"), int) else None
+        student = user_by_id.get(student_id or -1, {})
+        faculty = user_by_id.get(faculty_id or -1, {})
+
+        items.append({
+            "id": row.get("id"),
+            "response_id": payload.get("response_id"),
+            "exam_id": payload.get("exam_id"),
+            "exam_name": payload.get("exam_name") or "",
+            "question_id": payload.get("question_id"),
+            "why_wrong": payload.get("why_is_this_wrong") or "",
+            "expected_answer": payload.get("what_should_be_correct") or "",
+            "student_correct_option": payload.get("correct_option") or "",
+            "student_marked_option": payload.get("student_marked_option") or "",
+            "faculty_response": payload.get("faculty_response") or "",
+            "answered_at": payload.get("answered_at"),
+            "answer_key_corrected": bool(payload.get("answer_key_corrected")),
+            "corrected_option": payload.get("corrected_option") or "",
+            "created_at": row.get("created_at"),
+            "student_name": student.get("name") or "",
+            "student_roll": student.get("roll") or "",
+            "faculty_name": faculty.get("name") or "",
+            "faculty_roll": faculty.get("roll") or "",
+        })
+
+    return {
+        "queries": items,
+        "summary": {
+            "total": len(items),
+        },
+    }

@@ -451,6 +451,7 @@ async def listPapers(user=Depends(get_current_user)):
 
     paper_ids = [p["id"] for p in response.data]
     in_use_ids: set[int] = set()
+    used_before_ids: set[int] = set()
     if paper_ids:
         now_iso = _now_iso()
         exam_res = await db.client.table("Exams") \
@@ -459,6 +460,12 @@ async def listPapers(user=Depends(get_current_user)):
             .in_("questionpaper_id", paper_ids) \
             .execute()
         in_use_ids = {row["questionpaper_id"] for row in exam_res.data}
+
+        used_res = await db.client.table("Exams") \
+            .select("questionpaper_id") \
+            .in_("questionpaper_id", paper_ids) \
+            .execute()
+        used_before_ids = {row["questionpaper_id"] for row in (used_res.data or [])}
 
     papers = []
     for p in response.data:
@@ -474,6 +481,7 @@ async def listPapers(user=Depends(get_current_user)):
             "name": meta.get("exam_name") or f"Paper #{p['id']}",
             "total_marks": total_marks,
             "in_use": p["id"] in in_use_ids,
+            "used_in_exam_history": p["id"] in used_before_ids,
             "can_edit": p.get("creator_id") == user["id"],
         })
 
@@ -500,7 +508,13 @@ async def getPaper(paper_id: int, user=Depends(get_current_user)):
         .gte("end", now_iso) \
         .limit(1) \
         .execute()
+    used_res = await db.client.table("Exams") \
+        .select("id") \
+        .eq("questionpaper_id", paper_id) \
+        .limit(1) \
+        .execute()
     paper["in_use"] = len(exam_res.data) > 0
+    paper["used_in_exam_history"] = len(used_res.data) > 0
     paper["can_edit"] = paper.get("creator_id") == user["id"]
     return paper
 
@@ -525,8 +539,22 @@ async def updatePaper(paper_id: int, paper: QuestionPaper, user=Depends(get_curr
     if exam_res.data:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail="Paper is in use by an exam.")
 
+    used_before_res = await db.client.table("Exams") \
+        .select("id") \
+        .eq("questionpaper_id", paper_id) \
+        .limit(1) \
+        .execute()
+
+    existing_questions = existing.data[0].get("questions") or {}
+    incoming_questions = paper.questions or {}
+    if used_before_res.data and incoming_questions != existing_questions:
+        raise HTTPException(
+            status_code=HTTP_409_CONFLICT,
+            detail="This paper has already been used in an exam. Only answer option selection can be changed.",
+        )
+
     # Cleanup only keys no longer referenced by any paper after update.
-    old_keys = collect_image_keys(existing.data[0].get("questions") or {})
+    old_keys = collect_image_keys(existing_questions)
     new_keys = collect_image_keys(paper.questions)
     removed_keys = old_keys - new_keys
 

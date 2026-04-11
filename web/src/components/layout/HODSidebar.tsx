@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, UserCheck, Activity, FileText, CalendarDays, BarChart2, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, UserCheck, Activity, FileText, CalendarDays, BarChart2, MessageSquareWarning, LogOut, Loader2 } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
@@ -16,6 +16,7 @@ const NAV = [
   { label: "Question Papers",  href: "/hod/papers",    icon: FileText },
   { label: "Exams",            href: "/hod/exams",     icon: CalendarDays },
   { label: "Results",          href: "/hod/responses", icon: BarChart2 },
+  { label: "Solved Queries",   href: "/hod/queries",   icon: MessageSquareWarning },
 ];
 
 export default function HODSidebar() {

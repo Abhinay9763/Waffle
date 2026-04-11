@@ -311,6 +311,7 @@ interface PaperBuilderProps {
   paperId?: number;
   initialData?: InitialPaperData;
   inUse?: boolean;
+  usedInExamHistory?: boolean;
   canEdit?: boolean;
   basePath?: string;
 }
@@ -341,9 +342,9 @@ function buildInitialState(initialData?: InitialPaperData): BuilderState {
 // ── Option row ─────────────────────────────────────────────────────────────────
 
 function OptionRow({
-  letter, value, isCorrect, onChange, onMarkCorrect, onUploadImage, onPasteImage, onRemoveImage, uploading, readonly, optIdx,
+  letter, value, isCorrect, onChange, onMarkCorrect, onUploadImage, onPasteImage, onRemoveImage, uploading, textReadonly, correctReadonly, optIdx,
 }: {
-  letter: string; value: OptionValue; isCorrect: boolean; readonly?: boolean;
+  letter: string; value: OptionValue; isCorrect: boolean; textReadonly?: boolean; correctReadonly?: boolean;
   onChange: (v: string) => void; onMarkCorrect: () => void;
   onUploadImage: (file: File) => Promise<void>; onRemoveImage: () => void;
   onPasteImage: (file: File) => Promise<void>;
@@ -373,7 +374,7 @@ function OptionRow({
           value={value.text}
           onChange={e => onChange(e.target.value)}
           onPaste={async (e) => {
-            if (readonly) return;
+            if (textReadonly) return;
             const image = getClipboardImageFile(e);
             if (!image) return;
             e.preventDefault();
@@ -381,7 +382,7 @@ function OptionRow({
           }}
           placeholder={`Option ${letter}`}
           rows={1}
-          readOnly={readonly}
+          readOnly={textReadonly}
           data-stt-field={`option-${optIdx}`}
           onInput={e => {
             const el = e.currentTarget;
@@ -394,7 +395,7 @@ function OptionRow({
           <div className="relative inline-block">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={value.image_url} alt="" className="max-h-32 rounded-lg border border-zinc-700 object-contain" />
-            {!readonly && (
+            {!textReadonly && (
               <button
                 type="button"
                 onClick={onRemoveImage}
@@ -405,7 +406,7 @@ function OptionRow({
             )}
           </div>
         )}
-        {!readonly && !value.image_url && (
+        {!textReadonly && !value.image_url && (
           <>
             <button
               type="button"
@@ -433,7 +434,7 @@ function OptionRow({
       <button
         type="button"
         onClick={onMarkCorrect}
-        disabled={readonly}
+        disabled={correctReadonly}
         title={isCorrect ? "Correct answer" : "Mark as correct"}
         className={`
           shrink-0 w-5 h-5 mt-0.5 rounded-full border-2 flex items-center justify-center transition-all
@@ -450,10 +451,10 @@ function OptionRow({
 // ── Question editor ────────────────────────────────────────────────────────────
 
 function QuestionEditor({
-  q, displayIdx, total, dispatch, readonly, onUploadQImage, onPasteQImage, onRemoveQImage, onUploadOptImage, onPasteOptImage, onRemoveOptImage, uploadingSlot,
+  q, displayIdx, total, dispatch, readonly, keyOnlyMode, onUploadQImage, onPasteQImage, onRemoveQImage, onUploadOptImage, onPasteOptImage, onRemoveOptImage, uploadingSlot,
 }: {
   q: BuilderQuestion; displayIdx: number; total: number;
-  dispatch: React.Dispatch<Action>; readonly?: boolean;
+  dispatch: React.Dispatch<Action>; readonly?: boolean; keyOnlyMode?: boolean;
   onUploadQImage: (file: File) => Promise<void>;
   onPasteQImage: (file: File) => Promise<void>;
   onRemoveQImage: () => void;
@@ -463,6 +464,7 @@ function QuestionEditor({
   uploadingSlot: string | null;
 }) {
   const qImgRef = useRef<HTMLInputElement>(null);
+  const contentReadonly = !!readonly || !!keyOnlyMode;
 
   return (
     <div className="flex flex-col gap-7 flex-1 overflow-y-auto p-8">
@@ -473,12 +475,12 @@ function QuestionEditor({
           <span className="text-xs font-medium text-zinc-600 uppercase tracking-widest">
             Question {displayIdx} of {total}
           </span>
-          {!readonly && questionStatus(q) === "complete" && (
+          {!contentReadonly && questionStatus(q) === "complete" && (
             <span className="text-[10px] font-medium text-emerald-500 border border-emerald-800/50 bg-emerald-950/30 rounded px-1.5 py-0.5">
               Complete
             </span>
           )}
-          {!readonly && questionStatus(q) === "partial" && (
+          {!contentReadonly && questionStatus(q) === "partial" && (
             <span className="text-[10px] font-medium text-amber-500 border border-amber-800/50 bg-amber-950/30 rounded px-1.5 py-0.5">
               Incomplete
             </span>
@@ -490,7 +492,7 @@ function QuestionEditor({
           value={q.text}
           onChange={e => dispatch({ type: "UPDATE_Q_TEXT", text: e.target.value })}
           onPaste={async (e) => {
-            if (readonly) return;
+            if (contentReadonly) return;
             const image = getClipboardImageFile(e);
             if (!image) return;
             e.preventDefault();
@@ -498,7 +500,7 @@ function QuestionEditor({
           }}
           placeholder="Type the question here…"
           rows={3}
-          readOnly={readonly}
+          readOnly={contentReadonly}
           data-stt-field="question"
           className="
             w-full bg-zinc-900/60 border border-zinc-800 rounded-xl px-5 py-4
@@ -519,7 +521,7 @@ function QuestionEditor({
           <div className="relative inline-block">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={q.image_url} alt="" className="max-h-56 rounded-xl border border-zinc-700 object-contain" />
-            {!readonly && (
+            {!contentReadonly && (
               <button
                 type="button"
                 onClick={onRemoveQImage}
@@ -529,7 +531,7 @@ function QuestionEditor({
               </button>
             )}
           </div>
-        ) : !readonly && (
+        ) : !contentReadonly && (
           <>
             <button
               type="button"
@@ -572,7 +574,8 @@ function QuestionEditor({
             onPasteImage={(file) => onPasteOptImage(idx, file)}
             onRemoveImage={() => onRemoveOptImage(idx)}
             uploading={uploadingSlot === `o-${idx}`}
-            readonly={readonly}
+            textReadonly={contentReadonly}
+            correctReadonly={!!readonly}
           />
         ))}
       </div>
@@ -585,7 +588,7 @@ function QuestionEditor({
             type="number"
             min={0}
             value={q.marks}
-            readOnly={readonly}
+            readOnly={contentReadonly}
             onChange={e => dispatch({ type: "UPDATE_MARKS", marks: Number(e.target.value) })}
             className="
               w-20 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5
@@ -602,7 +605,7 @@ function QuestionEditor({
             min={0}
             step={0.25}
             value={q.negative_marks}
-            readOnly={readonly}
+            readOnly={contentReadonly}
             onChange={e => dispatch({ type: "UPDATE_NEG_MARKS", neg: Number(e.target.value) })}
             className="
               w-20 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5
@@ -627,10 +630,10 @@ const STATUS_STYLE = {
 };
 
 function NavPanel({
-  sections, activeId, dispatch, readonly,
+  sections, activeId, dispatch, readonly, structureLocked,
 }: {
   sections: BuilderSection[]; activeId: number | null;
-  dispatch: React.Dispatch<Action>; readonly?: boolean;
+  dispatch: React.Dispatch<Action>; readonly?: boolean; structureLocked?: boolean;
 }) {
   let palIdx = 0;
 
@@ -646,7 +649,7 @@ function NavPanel({
               <GripVertical className="w-3.5 h-3.5 text-zinc-700 shrink-0" />
               <input
                 value={section.name}
-                readOnly={readonly}
+                readOnly={readonly || structureLocked}
                 onChange={e => dispatch({ type: "UPDATE_SECTION_NAME", sectionId: section.section_id, name: e.target.value })}
                 className="
                   flex-1 bg-transparent text-xs font-semibold text-zinc-400
@@ -656,7 +659,7 @@ function NavPanel({
                   read-only:cursor-default read-only:focus:border-transparent
                 "
               />
-              {!readonly && sections.length > 1 && (
+              {!readonly && !structureLocked && sections.length > 1 && (
                 <button
                   type="button"
                   onClick={() => dispatch({ type: "REMOVE_SECTION", sectionId: section.section_id })}
@@ -692,7 +695,7 @@ function NavPanel({
               })}
 
               {/* Add question — hidden in readonly */}
-              {!readonly && (
+              {!readonly && !structureLocked && (
                 <button
                   type="button"
                   onClick={() => dispatch({ type: "ADD_QUESTION", sectionId: section.section_id })}
@@ -723,7 +726,7 @@ function NavPanel({
       </div>
 
       {/* Add section — hidden in readonly */}
-      {!readonly && (
+      {!readonly && !structureLocked && (
         <div className="px-3 pb-3 shrink-0">
           <button
             type="button"
@@ -747,7 +750,7 @@ function NavPanel({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function PaperBuilder({ paperId, initialData, inUse = false, canEdit = true, basePath = "/papers" }: PaperBuilderProps = {}) {
+export default function PaperBuilder({ paperId, initialData, inUse = false, usedInExamHistory = false, canEdit = true, basePath = "/papers" }: PaperBuilderProps = {}) {
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, initialData, buildInitialState);
   const [saving, setSaving] = useState(false);
@@ -876,6 +879,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, canE
   const totalQ = flat.length;
   const totalS = state.sections.length;
   const isReadOnly = inUse || !canEdit;
+  const keyOnlyMode = !isReadOnly && usedInExamHistory;
 
   const buildPayload = () => {
     const totalMarks = flat.reduce((sum, q) => sum + q.marks, 0);
@@ -1036,7 +1040,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, canE
         <input
           value={state.examName}
           onChange={e => dispatch({ type: "SET_NAME", name: e.target.value })}
-          readOnly={isReadOnly}
+          readOnly={isReadOnly || keyOnlyMode}
           placeholder="Untitled paper"
           className="flex-1 bg-transparent text-sm font-medium text-zinc-200 placeholder:text-zinc-600 outline-none min-w-0 read-only:cursor-default"
         />
@@ -1099,6 +1103,12 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, canE
         </div>
       )}
 
+      {!isReadOnly && keyOnlyMode && (
+        <div className="mx-5 mt-4 rounded-lg border border-amber-800/60 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
+          This paper has already been used in an exam. You can only change the correct option selection.
+        </div>
+      )}
+
       {/* ── Main split ──────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
 
@@ -1109,6 +1119,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, canE
             total={totalQ}
             dispatch={dispatch}
             readonly={isReadOnly}
+            keyOnlyMode={keyOnlyMode}
             onUploadQImage={handleUploadQImage}
             onPasteQImage={handlePasteQImage}
             onRemoveQImage={() => dispatch({ type: "SET_QUESTION_IMAGE", url: undefined })}
@@ -1128,6 +1139,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, canE
           activeId={state.activeId}
           dispatch={dispatch}
           readonly={isReadOnly}
+          structureLocked={keyOnlyMode}
         />
 
       </div>
@@ -1136,7 +1148,7 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, canE
       <footer className="flex items-center justify-between px-5 h-14 border-t border-zinc-800 bg-zinc-900/50 shrink-0">
 
         <div className="flex items-center gap-2">
-          {!isReadOnly && (
+          {!isReadOnly && !keyOnlyMode && (
             <>
               <button
                 type="button"
