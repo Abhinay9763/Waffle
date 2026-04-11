@@ -892,3 +892,66 @@ async def answerFacultyQuestionQuery(query_id: int, body: AnswerFlaggedQuestionR
         .execute()
 
     return {"msg": "Query answered successfully."}
+
+
+@router.get("/response/queries/my", status_code=HTTP_200_OK)
+async def getMyQuestionQueries(user=Depends(get_current_user)):
+    """Student view of their flagged-question queries and faculty responses."""
+    if user.get("role") != "Student":
+        raise HTTPException(status_code=403, detail="Only students can view their queries.")
+
+    rows = []
+    try:
+        res = await db.client.table("FlaggedQuestions") \
+            .select("id,student_id,payload,created_at") \
+            .eq("student_id", user["id"]) \
+            .order("created_at", desc=True) \
+            .execute()
+        rows = res.data or []
+    except Exception:
+        try:
+            res = await db.client.table("flagged_questions") \
+                .select("id,student_id,payload,created_at") \
+                .eq("student_id", user["id"]) \
+                .order("created_at", desc=True) \
+                .execute()
+            rows = res.data or []
+        except Exception:
+            rows = []
+
+    items = []
+    for row in rows:
+        payload = row.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        faculty_answer = str(payload.get("faculty_response") or "").strip()
+        items.append({
+            "id": row.get("id"),
+            "response_id": payload.get("response_id"),
+            "exam_id": payload.get("exam_id"),
+            "exam_name": payload.get("exam_name") or "",
+            "question_id": payload.get("question_id"),
+            "why_wrong": payload.get("why_is_this_wrong") or "",
+            "expected_answer": payload.get("what_should_be_correct") or "",
+            "student_correct_option": payload.get("correct_option") or "",
+            "student_marked_option": payload.get("student_marked_option") or "",
+            "faculty_response": faculty_answer,
+            "status": "answered" if faculty_answer else "pending",
+            "answered_at": payload.get("answered_at"),
+            "answer_key_corrected": bool(payload.get("answer_key_corrected")),
+            "corrected_option": payload.get("corrected_option") or "",
+            "created_at": row.get("created_at"),
+        })
+
+    pending = sum(1 for i in items if i.get("status") == "pending")
+    answered = len(items) - pending
+
+    return {
+        "queries": items,
+        "summary": {
+            "total": len(items),
+            "pending": pending,
+            "answered": answered,
+        },
+    }

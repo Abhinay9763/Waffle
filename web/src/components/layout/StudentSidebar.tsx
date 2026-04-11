@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Clock, BarChart2, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, Clock, BarChart2, MessageSquareWarning, LogOut, Loader2 } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
@@ -11,6 +11,7 @@ import { API, APP_NAME } from "@/lib/config";
 const NAV = [
   { label: "Dashboard",  href: "/student",   icon: LayoutDashboard },
   { label: "My Results", href: "/history",   icon: Clock },
+  { label: "My Queries", href: "/student/queries", icon: MessageSquareWarning },
   { label: "Analytics",  href: "/analytics", icon: BarChart2 },
 ];
 
