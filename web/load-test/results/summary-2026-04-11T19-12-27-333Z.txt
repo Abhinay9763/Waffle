@@ -1,0 +1,18 @@
+Load test summary @ 2026-04-11T19:12:27.333Z
+Base URL: https://waffle-afu5.onrender.com
+Read candidates: 39
+Heartbeat scenario: enabled
+
+http_reqs: count=29728  rate=247.1104650477309
+http_req_failed: rate=1
+http_req_duration: avg=67.9720372039835  med=64.982  p(90)=77.1155  p(95)=87.6542  max=372.2361
+checks: rate=0
+status_2xx: n/a
+status_3xx: n/a
+status_4xx: n/a
+status_5xx: count=29728  rate=247.1104650477309
+status_0xx: n/a
+
+Scenarios:
+- read_mix: vus=64, duration=2m
+- heartbeat_storm: vus=15, duration=2m

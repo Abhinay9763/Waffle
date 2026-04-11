@@ -1,0 +1,18 @@
+Load test summary @ 2026-04-11T19:40:48.119Z
+Base URL: https://smecs-non-ind.onrender.com
+Read candidates: 21
+Heartbeat scenario: enabled
+
+http_reqs: count=15992  rate=128.5393568513507
+http_req_failed: rate=0.019759879939969985
+http_req_duration: avg=2015.4561430089989  med=1762.4472  p(90)=2463.6353299999996  p(95)=6909.965059999975  max=29841.7373
+checks: rate=1
+status_2xx: count=15676  rate=125.99943459240706
+status_3xx: n/a
+status_4xx: count=316  rate=2.539922258943648
+status_5xx: count=0  rate=0
+status_0xx: n/a
+
+Scenarios:
+- read_mix: vus=60, duration=2m
+- heartbeat_storm: vus=240, duration=2m
