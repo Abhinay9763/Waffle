@@ -18,7 +18,7 @@ export default async function StudentExamPage({
         <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Exam Mode</p>
         <h1 className="mt-2 text-2xl font-semibold text-zinc-100">Choose how you want to take this exam</h1>
         <p className="mt-3 text-sm text-zinc-400">
-          Normal mode uses the standard exam interface. Blind mode adds voice guidance and requires microphone access.
+          Normal mode uses the standard exam interface. Blind mode adds voice guidance and is available on larger screens.
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -32,7 +32,7 @@ export default async function StudentExamPage({
 
           <Link
             href={`/exam/${examId}/blind`}
-            className="group rounded-xl border border-amber-800/60 bg-amber-950/20 p-5 transition hover:border-amber-600 hover:bg-amber-900/30"
+            className="group hidden rounded-xl border border-amber-800/60 bg-amber-950/20 p-5 transition hover:border-amber-600 hover:bg-amber-900/30 sm:block"
           >
             <p className="text-sm font-semibold text-amber-300">Blind Mode</p>
             <p className="mt-2 text-xs text-zinc-300">Voice-guided mode with text-to-speech and speech recognition.</p>

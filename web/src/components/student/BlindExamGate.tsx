@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BlindExamRunner from "@/components/student/BlindExamRunner";
 import { ExamStructure } from "@/components/student/types";
@@ -8,6 +8,16 @@ import { ExamStructure } from "@/components/student/types";
 export default function BlindExamGate({ exam }: { exam: ExamStructure }) {
   const [status, setStatus] = useState<"idle" | "requesting" | "denied" | "granted">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [mobileBlocked, setMobileBlocked] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setMobileBlocked(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   const formatMicError = (err: unknown) => {
     const name = err instanceof DOMException ? err.name : "";
@@ -66,8 +76,38 @@ export default function BlindExamGate({ exam }: { exam: ExamStructure }) {
     }
   };
 
-  if (status === "granted") {
+  if (status === "granted" && !mobileBlocked) {
     return <BlindExamRunner exam={exam} />;
+  }
+
+  if (mobileBlocked) {
+    return (
+      <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-2xl items-center px-6 py-10">
+        <div className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 text-center shadow-lg shadow-black/30">
+          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Blind Mode</p>
+          <h1 className="mt-2 text-2xl font-semibold text-zinc-100">Blind mode is not available on mobile</h1>
+          <p className="mt-3 text-sm text-zinc-400">
+            Use normal mode on this device, or switch to a larger screen to use blind mode.
+          </p>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href={`/exam/${exam.meta.exam_id}/normal`}
+              className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500"
+            >
+              Continue in normal mode
+            </Link>
+
+            <Link
+              href="/student"
+              className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500"
+            >
+              Cancel
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
