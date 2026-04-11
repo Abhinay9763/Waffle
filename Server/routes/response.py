@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND
 
 from deps import get_current_user
-from models import Heartbeat, Submit, FlagQuestionRequest
+from models import Heartbeat, Submit, FlagQuestionRequest, AnswerFlaggedQuestionRequest
 from supa import db
 
 router = APIRouter()
@@ -319,6 +319,54 @@ def _compute_total_marks_for_submission(response: dict, questions_data: dict, fa
     return total if total > 0 else fallback_total
 
 
+def _is_exam_response_released(exam: dict, release_state: dict) -> bool:
+    if release_state.get("released_manually"):
+        return True
+
+    if not release_state.get("auto_release"):
+        return False
+
+    end_raw = exam.get("end")
+    if not isinstance(end_raw, str):
+        return False
+    try:
+        end_dt = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+    except Exception:
+        return False
+    return datetime.now(timezone.utc) >= end_dt
+
+
+async def _get_release_state_by_exam_ids(exam_ids: list[int]) -> dict[int, dict]:
+    if not exam_ids:
+        return {}
+
+    logs_res = await db.client.table("ExamLogs") \
+        .select("exam_id,event") \
+        .in_("exam_id", exam_ids) \
+        .in_("event", ["responses_auto_release_enabled", "responses_released"]) \
+        .execute()
+
+    state = {
+        exam_id: {
+            "auto_release": False,
+            "released_manually": False,
+        }
+        for exam_id in exam_ids
+    }
+
+    for row in logs_res.data or []:
+        exam_id = row.get("exam_id")
+        event = row.get("event")
+        if not isinstance(exam_id, int) or exam_id not in state:
+            continue
+        if event == "responses_auto_release_enabled":
+            state[exam_id]["auto_release"] = True
+        elif event == "responses_released":
+            state[exam_id]["released_manually"] = True
+
+    return state
+
+
 def _filter_questions_by_scope(questions_data: dict, scope_ids: set[int] | None) -> dict:
     if not scope_ids:
         return questions_data
@@ -400,6 +448,9 @@ async def getMyResponses(user=Depends(get_current_user)):
         .order("submitted_at", desc=True) \
         .execute()
 
+    exam_ids = [r["Exams"].get("id") for r in resp_res.data if isinstance(r.get("Exams", {}).get("id"), int)]
+    release_state_map = await _get_release_state_by_exam_ids(exam_ids)
+
     paper_ids = list({r["Exams"]["questionpaper_id"] for r in resp_res.data})
     papers: dict = {}
     if paper_ids:
@@ -412,6 +463,8 @@ async def getMyResponses(user=Depends(get_current_user)):
     result = []
     for r in resp_res.data:
         exam  = r["Exams"]
+        release_state = release_state_map.get(exam.get("id"), {"auto_release": False, "released_manually": False})
+        is_released = _is_exam_response_released(exam, release_state)
         paper = papers.get(exam["questionpaper_id"], {})
         score = _compute_score(
             r["response"],
@@ -434,6 +487,8 @@ async def getMyResponses(user=Depends(get_current_user)):
             "score":        score,
             "total_marks":  effective_total,
             "percentage":   round(score / total_for_pct * 100, 1),
+            "responses_released": is_released,
+            "release_after_exam": bool(release_state.get("auto_release")),
         })
 
     return {"responses": result}
@@ -455,6 +510,12 @@ async def getMyResponseDetail(response_id: int, user=Depends(get_current_user)):
 
     row = resp_res.data[0]
     exam = row.get("Exams") or {}
+
+    release_state_map = await _get_release_state_by_exam_ids([exam.get("id")] if isinstance(exam.get("id"), int) else [])
+    release_state = release_state_map.get(exam.get("id"), {"auto_release": False, "released_manually": False})
+    if not _is_exam_response_released(exam, release_state):
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Response review is not released by faculty yet.")
+
     question_paper_id = exam.get("questionpaper_id")
     if not question_paper_id:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found for this response.")
@@ -560,6 +621,12 @@ async def flagMyQuestion(response_id: int, body: FlagQuestionRequest, user=Depen
 
     row = resp_res.data[0]
     exam = row.get("Exams") or {}
+
+    release_state_map = await _get_release_state_by_exam_ids([exam.get("id")] if isinstance(exam.get("id"), int) else [])
+    release_state = release_state_map.get(exam.get("id"), {"auto_release": False, "released_manually": False})
+    if not _is_exam_response_released(exam, release_state):
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Response review is not released by faculty yet.")
+
     faculty_id = exam.get("creator_id")
     paper_id = exam.get("questionpaper_id")
     if not isinstance(faculty_id, int):
@@ -616,3 +683,122 @@ async def flagMyQuestion(response_id: int, body: FlagQuestionRequest, user=Depen
             raise HTTPException(status_code=400, detail="Flag table not found or schema mismatch. Create FlaggedQuestions/flagged_questions with student_id, faculty_id, payload.")
 
     return {"msg": "Question flagged successfully."}
+
+
+@router.get("/response/queries/my-faculty", status_code=HTTP_200_OK)
+async def getFacultyQuestionQueries(user=Depends(get_current_user)):
+    """Faculty inbox of student flagged-question queries."""
+    if user.get("role") not in {"Faculty", "HOD", "Admin"}:
+        raise HTTPException(status_code=403, detail="Only faculty can view question queries.")
+
+    rows = []
+    try:
+        res = await db.client.table("FlaggedQuestions") \
+            .select("id,student_id,payload,created_at") \
+            .eq("faculty_id", user["id"]) \
+            .order("created_at", desc=True) \
+            .execute()
+        rows = res.data or []
+    except Exception:
+        try:
+            res = await db.client.table("flagged_questions") \
+                .select("id,student_id,payload,created_at") \
+                .eq("faculty_id", user["id"]) \
+                .order("created_at", desc=True) \
+                .execute()
+            rows = res.data or []
+        except Exception:
+            rows = []
+
+    student_ids = sorted({r.get("student_id") for r in rows if isinstance(r.get("student_id"), int)})
+    user_by_id: dict[int, dict] = {}
+    if student_ids:
+        users_res = await db.client.table("Users") \
+            .select("id,name,roll") \
+            .in_("id", student_ids) \
+            .execute()
+        user_by_id = {u["id"]: u for u in (users_res.data or []) if isinstance(u.get("id"), int)}
+
+    items = []
+    for row in rows:
+        payload = row.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        student_id = row.get("student_id") if isinstance(row.get("student_id"), int) else None
+        student = user_by_id.get(student_id or -1, {})
+        faculty_answer = str(payload.get("faculty_response") or "").strip()
+
+        items.append({
+            "id": row.get("id"),
+            "response_id": payload.get("response_id"),
+            "exam_id": payload.get("exam_id"),
+            "exam_name": payload.get("exam_name") or "",
+            "question_id": payload.get("question_id"),
+            "why_wrong": payload.get("why_is_this_wrong") or "",
+            "expected_answer": payload.get("what_should_be_correct") or "",
+            "student_correct_option": payload.get("correct_option") or "",
+            "faculty_response": faculty_answer,
+            "status": "answered" if faculty_answer else "pending",
+            "answered_at": payload.get("answered_at"),
+            "created_at": row.get("created_at"),
+            "student_name": student.get("name") or "",
+            "student_roll": student.get("roll") or "",
+        })
+
+    pending = sum(1 for i in items if i.get("status") == "pending")
+    answered = len(items) - pending
+    return {
+        "queries": items,
+        "summary": {
+            "total": len(items),
+            "pending": pending,
+            "answered": answered,
+        },
+    }
+
+
+@router.post("/response/queries/{query_id}/answer", status_code=HTTP_200_OK)
+async def answerFacultyQuestionQuery(query_id: int, body: AnswerFlaggedQuestionRequest, user=Depends(get_current_user)):
+    """Faculty answers a student flagged-question query."""
+    if user.get("role") not in {"Faculty", "HOD", "Admin"}:
+        raise HTTPException(status_code=403, detail="Only faculty can answer question queries.")
+
+    answer = (body.answer or "").strip()
+    if not answer:
+        raise HTTPException(status_code=400, detail="Answer is required.")
+
+    row = None
+    table_name = "FlaggedQuestions"
+    try:
+        res = await db.client.table("FlaggedQuestions") \
+            .select("id,payload") \
+            .eq("id", query_id) \
+            .eq("faculty_id", user["id"]) \
+            .limit(1) \
+            .execute()
+        row = res.data[0] if res.data else None
+    except Exception:
+        table_name = "flagged_questions"
+        res = await db.client.table("flagged_questions") \
+            .select("id,payload") \
+            .eq("id", query_id) \
+            .eq("faculty_id", user["id"]) \
+            .limit(1) \
+            .execute()
+        row = res.data[0] if res.data else None
+
+    if not row:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Query not found.")
+
+    payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+    payload["faculty_response"] = answer
+    payload["answered_at"] = datetime.now(timezone.utc).isoformat()
+    payload["answered_by"] = user.get("name") or "Faculty"
+
+    await db.client.table(table_name) \
+        .update({"payload": payload}) \
+        .eq("id", query_id) \
+        .eq("faculty_id", user["id"]) \
+        .execute()
+
+    return {"msg": "Query answered successfully."}

@@ -13,6 +13,8 @@ interface Exam {
   total_marks: number;
   start: string;
   end: string;
+  responses_released?: boolean;
+  release_after_exam?: boolean;
 }
 
 function statusOf(start: string, end: string): "live" | "upcoming" | "ended" {
@@ -46,12 +48,15 @@ const STATUS_STYLE = {
 };
 const STATUS_LABEL = { live: "Live", upcoming: "Upcoming", ended: "Ended" };
 
-function ExamRow({ exam, onDelete, deleting }: {
+function ExamRow({ exam, onRelease, releasing, onDelete, deleting }: {
   exam: Exam;
+  onRelease: () => void;
+  releasing: boolean;
   onDelete: () => void;
   deleting: boolean;
 }) {
   const status = statusOf(exam.start, exam.end);
+  const canReleaseNow = status === "ended" && !exam.responses_released;
   return (
     <div className="flex items-center gap-4 px-4 py-3.5 hover:bg-zinc-800/30 transition-colors">
       <div className="flex-1 min-w-0 space-y-0.5">
@@ -89,6 +94,26 @@ function ExamRow({ exam, onDelete, deleting }: {
         {status === "live" ? "Live view" : "Results"}
         <ChevronRight className="w-3.5 h-3.5" />
       </Link>
+      {canReleaseNow && (
+        <button
+          onClick={onRelease}
+          disabled={releasing}
+          className="shrink-0 rounded-lg border border-emerald-800/60 px-2.5 py-1 text-xs text-emerald-300 transition-colors hover:border-emerald-700 hover:bg-emerald-950/20 disabled:cursor-not-allowed disabled:opacity-60"
+          title="Release responses to students"
+        >
+          {releasing ? "Releasing..." : "Release responses"}
+        </button>
+      )}
+      {status === "ended" && exam.responses_released && (
+        <span className="shrink-0 rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-2.5 py-1 text-xs text-emerald-300">
+          Released
+        </span>
+      )}
+      {status !== "ended" && exam.release_after_exam && (
+        <span className="shrink-0 rounded-lg border border-sky-800/50 bg-sky-950/20 px-2.5 py-1 text-xs text-sky-300">
+          Auto-release enabled
+        </span>
+      )}
       {status !== "live" && (
         <button
           onClick={onDelete}
@@ -107,6 +132,7 @@ export default function ExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [releasingId, setReleasingId] = useState<number | null>(null);
 
   useEffect(() => {
     const token = getCookie("wfl-session") as string | undefined;
@@ -135,6 +161,30 @@ export default function ExamsPage() {
       const body = await res?.json().catch(() => ({})) ?? {};
       toast.error(body.detail ?? "Failed to delete exam.");
     }
+  };
+
+  const handleRelease = async (exam: Exam) => {
+    const token = getCookie("wfl-session") as string | undefined;
+    if (!token) return;
+    setReleasingId(exam.id);
+
+    const res = await fetch(`${API}/exam/${exam.id}/release-responses`, {
+      method: "POST",
+      headers: { "x-session-token": token },
+    }).catch(() => null);
+
+    setReleasingId(null);
+
+    if (res?.ok) {
+      toast.success("Responses released to students.");
+      setExams((prev) => prev.map((e) => (
+        e.id === exam.id ? { ...e, responses_released: true } : e
+      )));
+      return;
+    }
+
+    const body = await res?.json().catch(() => ({})) ?? {};
+    toast.error(body.detail ?? "Failed to release responses.");
   };
 
   if (loading) {
@@ -199,6 +249,8 @@ export default function ExamsPage() {
                 <ExamRow
                   key={e.id}
                   exam={e}
+                  onRelease={() => handleRelease(e)}
+                  releasing={releasingId === e.id}
                   onDelete={() => handleDelete(e)}
                   deleting={deletingId === e.id}
                 />

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FileText, CalendarDays, BarChart2, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, FileText, CalendarDays, BarChart2, MessageSquareWarning, LogOut, Loader2 } from "lucide-react";
 import { WaffleLogo } from "@/components/WaffleLogo";
 import { getCookie, deleteCookie } from "cookies-next";
 import { API, APP_NAME } from "@/lib/config";
@@ -12,6 +12,7 @@ const NAV = [
   { label: "Question Papers",  href: "/papers",    icon: FileText },
   { label: "Exams",            href: "/exams",     icon: CalendarDays },
   { label: "Results",          href: "/responses", icon: BarChart2 },
+  { label: "Question Queries", href: "/queries",   icon: MessageSquareWarning },
 ];
 
 export default function FacultySidebar() {

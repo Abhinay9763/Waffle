@@ -27,6 +27,7 @@ const schema = z
     max_warnings: z.coerce.number().int().min(1, "Must be at least 1 warning").max(20, "Keep this at 20 or less"),
     audience_mode: z.enum(["all", "selected"]),
     allowed_sections: z.array(z.string()).default([]),
+    release_after_exam: z.boolean().default(false),
     join_window: z.preprocess(
       (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
       z.number().int().min(1, "Must be at least 1 minute").optional(),
@@ -127,6 +128,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
       max_warnings: 3,
       audience_mode: "all",
       allowed_sections: [],
+      release_after_exam: false,
     }
   });
 
@@ -185,6 +187,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
           max_warnings: data.max_warnings,
           allowed_sections: data.audience_mode === "selected" ? data.allowed_sections : [],
           join_window: data.join_window ?? null,
+          release_after_exam: data.release_after_exam,
         }),
       });
     } catch {
@@ -381,6 +384,20 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
             </div>
             <p className="text-xs text-zinc-600">Students cannot join after this many minutes. Leave blank for no limit.</p>
             <FieldError message={errors.join_window?.message} />
+          </div>
+
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3.5 py-3">
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                {...register("release_after_exam")}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-yellow-500"
+              />
+              <div>
+                <p className="text-sm font-medium text-zinc-200">Release responses automatically after exam ends</p>
+                <p className="text-xs text-zinc-500">If unchecked, students can view responses only after you release them manually.</p>
+              </div>
+            </label>
           </div>
 
             {/* Audience sections */}

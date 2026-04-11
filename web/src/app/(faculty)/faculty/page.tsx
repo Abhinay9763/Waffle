@@ -11,6 +11,7 @@ type DashboardStats = {
   exams_created: number;
   student_submissions: number;
   flagged_questions: number;
+  pending_queries?: number;
 };
 
 type DashboardExam = {
@@ -34,6 +35,13 @@ type DashboardData = {
   stats: DashboardStats;
   recent_exams: DashboardExam[];
   recent_papers: DashboardPaper[];
+  recent_queries?: Array<{
+    id: number;
+    exam_name: string;
+    question_id: number;
+    status: "pending" | "answered";
+    created_at: string;
+  }>;
 };
 
 function fmtDateTime(iso: string) {
@@ -112,6 +120,11 @@ export default function FacultyDashboard() {
         value: stats.flagged_questions,
         icon: Flag,
       },
+      {
+        label: "Pending Queries",
+        value: stats.pending_queries ?? 0,
+        icon: Flag,
+      },
     ];
   }, [data]);
 
@@ -168,7 +181,7 @@ export default function FacultyDashboard() {
           </div>
         </section>
 
-        <section className="grid grid-cols-4 gap-3">
+        <section className="grid grid-cols-5 gap-3">
           {statCards.map((card) => (
             <div key={card.label} className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
               <div className="flex items-center justify-between">
@@ -231,6 +244,39 @@ export default function FacultyDashboard() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-zinc-100">Question Queries</h2>
+            <Link href="/queries" className="text-xs text-zinc-400 hover:text-zinc-200">Open inbox</Link>
+          </div>
+
+          {!data.recent_queries || data.recent_queries.length === 0 ? (
+            <p className="text-sm text-zinc-500">No student queries yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {data.recent_queries.map((query) => (
+                <div key={query.id} className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate text-sm font-medium text-zinc-100">
+                      {query.exam_name || "Exam"} · Q{query.question_id}
+                    </p>
+                    <span
+                      className={`rounded border px-1.5 py-0.5 text-[11px] ${
+                        query.status === "pending"
+                          ? "border-amber-800/60 bg-amber-950/20 text-amber-300"
+                          : "border-emerald-800/60 bg-emerald-950/20 text-emerald-300"
+                      }`}
+                    >
+                      {query.status}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-zinc-600">{fmtDateTime(query.created_at)}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </div>

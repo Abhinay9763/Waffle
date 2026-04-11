@@ -239,6 +239,54 @@ def _count_questions(questions: dict) -> int:
     return total
 
 
+async def _get_release_state_by_exam_ids(exam_ids: list[int]) -> dict[int, dict]:
+    if not exam_ids:
+        return {}
+
+    logs_res = await db.client.table("ExamLogs") \
+        .select("exam_id,event") \
+        .in_("exam_id", exam_ids) \
+        .in_("event", ["responses_auto_release_enabled", "responses_released"]) \
+        .execute()
+
+    state = {
+        exam_id: {
+            "auto_release": False,
+            "released_manually": False,
+        }
+        for exam_id in exam_ids
+    }
+
+    for row in logs_res.data or []:
+        exam_id = row.get("exam_id")
+        event = row.get("event")
+        if not isinstance(exam_id, int) or exam_id not in state:
+            continue
+        if event == "responses_auto_release_enabled":
+            state[exam_id]["auto_release"] = True
+        elif event == "responses_released":
+            state[exam_id]["released_manually"] = True
+
+    return state
+
+
+def _is_exam_response_released(exam: dict, release_state: dict) -> bool:
+    if release_state.get("released_manually"):
+        return True
+
+    if not release_state.get("auto_release"):
+        return False
+
+    end_raw = exam.get("end")
+    if not isinstance(end_raw, str):
+        return False
+    try:
+        end_dt = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+    except Exception:
+        return False
+    return datetime.now(timezone.utc) >= end_dt
+
+
 async def _get_exam_core(exam_id: int) -> dict | None:
     key = f"exam:core:{exam_id}"
     cached = await get_cache(key)
@@ -321,6 +369,7 @@ async def _invalidate_exam_cache(exam_id: int) -> None:
 @router.post("/exam/create", status_code=HTTP_201_CREATED)
 async def createExam(exam: Exam, user=Depends(get_current_user)):
     data = exam.model_dump(exclude={"id", "created_at"})
+    release_after_exam = bool(data.pop("release_after_exam", False))
     data["allowed_sections"] = _normalize_allowed_sections(data.get("allowed_sections"))
     data["creator_id"] = user["id"]
     data["start"] = data["start"].isoformat()
@@ -343,8 +392,16 @@ async def createExam(exam: Exam, user=Depends(get_current_user)):
             response = await db.client.table("Exams").insert(legacy_data).execute()
         else:
             raise
-    await _invalidate_exam_cache(response.data[0]["id"])
-    return {"msg": "Exam created", "id": response.data[0]["id"]}
+    exam_id = response.data[0]["id"]
+    if release_after_exam:
+        await db.client.table("ExamLogs").insert({
+            "exam_id": exam_id,
+            "user_id": user["id"],
+            "event": "responses_auto_release_enabled",
+        }).execute()
+
+    await _invalidate_exam_cache(exam_id)
+    return {"msg": "Exam created", "id": exam_id}
 
 
 @router.delete("/exam/{exam_id}")
@@ -476,9 +533,50 @@ async def listExams(user=Depends(get_current_user)):
         query = query.eq("creator_id", user["id"])
     response = await query.execute()
     exams = response.data or []
+
+    exam_ids = [e.get("id") for e in exams if isinstance(e.get("id"), int)]
+    release_state_map = await _get_release_state_by_exam_ids(exam_ids)
+
     for exam in exams:
+        exam_id = exam.get("id")
+        release_state = release_state_map.get(exam_id, {"auto_release": False, "released_manually": False})
         exam["can_manage"] = exam.get("creator_id") == user["id"]
+        exam["release_after_exam"] = bool(release_state.get("auto_release"))
+        exam["responses_released"] = _is_exam_response_released(exam, release_state)
     return {"exams": exams}
+
+
+@router.post("/exam/{exam_id}/release-responses")
+async def releaseExamResponses(exam_id: int, user=Depends(get_current_user)):
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    try:
+        end_dt = datetime.fromisoformat(str(exam.get("end", "")).replace("Z", "+00:00"))
+    except Exception:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Exam end time is invalid.")
+
+    if datetime.now(timezone.utc) < end_dt:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="You can release responses only after the exam ends.")
+
+    existing_release = await db.client.table("ExamLogs") \
+        .select("id") \
+        .eq("exam_id", exam_id) \
+        .eq("event", "responses_released") \
+        .limit(1) \
+        .execute()
+
+    if existing_release.data:
+        return {"msg": "Responses already released."}
+
+    await db.client.table("ExamLogs").insert({
+        "exam_id": exam_id,
+        "user_id": user["id"],
+        "event": "responses_released",
+    }).execute()
+
+    return {"msg": "Responses released."}
 
 
 @router.get("/exam/faculty-dashboard")
@@ -536,21 +634,42 @@ async def facultyDashboard(user=Depends(get_current_user)):
         })
 
     flagged_count = 0
+    query_rows = []
     try:
         flags_res = await db.client.table("FlaggedQuestions") \
-            .select("id") \
+            .select("id,payload,created_at") \
             .eq("faculty_id", owner_id) \
             .execute()
-        flagged_count = len(flags_res.data or [])
+        query_rows = flags_res.data or []
+        flagged_count = len(query_rows)
     except Exception:
         try:
             flags_res = await db.client.table("flagged_questions") \
-                .select("id") \
+                .select("id,payload,created_at") \
                 .eq("faculty_id", owner_id) \
                 .execute()
-            flagged_count = len(flags_res.data or [])
+            query_rows = flags_res.data or []
+            flagged_count = len(query_rows)
         except Exception:
             flagged_count = 0
+            query_rows = []
+
+    recent_queries = []
+    pending_queries = 0
+    for row in query_rows:
+        payload = row.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        answered = bool(str(payload.get("faculty_response") or "").strip())
+        if not answered:
+            pending_queries += 1
+        recent_queries.append({
+            "id": row.get("id"),
+            "exam_name": payload.get("exam_name") or "",
+            "question_id": payload.get("question_id"),
+            "status": "answered" if answered else "pending",
+            "created_at": row.get("created_at"),
+        })
 
     recent_exams = []
     for exam in exams[:6]:
@@ -572,9 +691,11 @@ async def facultyDashboard(user=Depends(get_current_user)):
             "exams_created": len(exams),
             "student_submissions": responses_count,
             "flagged_questions": flagged_count,
+            "pending_queries": pending_queries,
         },
         "recent_exams": recent_exams,
         "recent_papers": recent_papers[:6],
+        "recent_queries": recent_queries[:6],
     }
 
 

@@ -26,7 +26,7 @@ export default function QuestionView({
     <div className="space-y-4">
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
         <p className="text-sm text-zinc-500 select-none">Question {question.question_id}</p>
-        <p className="mt-2 text-base text-zinc-100 leading-relaxed select-none">{question.text}</p>
+        <p className="mt-2 whitespace-pre-wrap text-base text-zinc-100 leading-relaxed select-none">{question.text}</p>
         {question.image_url && (
           <img
             src={question.image_url}
@@ -54,7 +54,7 @@ export default function QuestionView({
                   {String.fromCharCode(65 + idx)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-zinc-200 leading-relaxed select-none">{optText(opt)}</p>
+                  <p className="whitespace-pre-wrap text-sm text-zinc-200 leading-relaxed select-none">{optText(opt)}</p>
                   {image && (
                     <img
                       src={image}

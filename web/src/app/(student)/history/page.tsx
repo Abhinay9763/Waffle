@@ -15,6 +15,8 @@ interface MyResponse {
   score: number;
   total_marks: number;
   percentage: number;
+  responses_released?: boolean;
+  release_after_exam?: boolean;
 }
 
 function fmtDate(iso: string) {
@@ -105,12 +107,18 @@ export default function HistoryPage() {
                     <PctBadge pct={r.percentage} />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/history/${r.id}`}
-                      className="inline-flex rounded-md border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-200 transition hover:border-zinc-500"
-                    >
-                      View response
-                    </Link>
+                    {r.responses_released ? (
+                      <Link
+                        href={`/history/${r.id}`}
+                        className="inline-flex rounded-md border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-200 transition hover:border-zinc-500"
+                      >
+                        View response
+                      </Link>
+                    ) : (
+                      <span className="inline-flex rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-500">
+                        {r.release_after_exam ? "Available after exam ends" : "Not released"}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

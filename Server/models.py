@@ -57,6 +57,7 @@ class Exam(BaseModel):
     join_window : Optional[int] = None  # minutes after start; None = no limit
     max_warnings : Optional[int] = 3
     allowed_sections: Optional[list[str]] = None
+    release_after_exam: Optional[bool] = False
 
 class Response(BaseModel):
     id : Optional[int] = None
@@ -82,6 +83,10 @@ class FlagQuestionRequest(BaseModel):
     why_wrong: str
     expected_answer: str
     correct_option: str
+
+
+class AnswerFlaggedQuestionRequest(BaseModel):
+    answer: str
 
 class RetakeRequest(BaseModel):
     user_id: int

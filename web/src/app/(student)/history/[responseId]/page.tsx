@@ -315,7 +315,7 @@ export default function ResponseDetailPage() {
               <div className="space-y-4">
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
                   <p className="text-sm text-zinc-500">Question {flatQuestions.findIndex((q) => q.question_id === activeQuestion.question_id) + 1}</p>
-                  <p className="mt-2 text-base leading-relaxed text-zinc-100">{activeQuestion.text}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-zinc-100">{activeQuestion.text}</p>
                   {activeQuestion.image_url && (
                     <img
                       src={activeQuestion.image_url}
@@ -346,7 +346,7 @@ export default function ResponseDetailPage() {
                             {String.fromCharCode(65 + idx)}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm leading-relaxed text-zinc-200">{optionText(opt)}</p>
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">{optionText(opt)}</p>
                             {optionImage(opt) && (
                               <img
                                 src={optionImage(opt)}
