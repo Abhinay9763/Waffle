@@ -1,5 +1,5 @@
 export const APP_NAME =  process.env.NEXT_PUBLIC_APP_NAME ?? "SMECS";
-export const APP_DESC = process.env.NEXT_PUBLIC_APP_DESC ?? "St. Martin’s Exam Central System";
+export const APP_DESC = process.env.NEXT_PUBLIC_APP_DESC ?? "Exam Central System";
 export const APP_SHORT_NAME = process.env.NEXT_PUBLIC_APP_SHORT_NAME ?? "SMECS";
 export const ORG_SHORT_NAME = process.env.NEXT_PUBLIC_ORG_SHORT_NAME ?? "SMEC";
 export const ORG_DOMAIN = process.env.NEXT_PUBLIC_ORG_DOMAIN ?? "smec.ac.in";
