@@ -15,9 +15,12 @@ type QueryItem = {
   why_wrong: string;
   expected_answer: string;
   student_correct_option: string;
+  student_marked_option: string;
   faculty_response: string;
   status: "pending" | "answered";
   answered_at?: string | null;
+  answer_key_corrected?: boolean;
+  corrected_option?: string;
   created_at?: string | null;
   student_name: string;
   student_roll: string;
@@ -46,6 +49,9 @@ export default function FacultyQueriesPage() {
   const [summary, setSummary] = useState<QuerySummary>({ total: 0, pending: 0, answered: 0 });
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [expandedAnswered, setExpandedAnswered] = useState<Record<number, boolean>>({});
+  const [applyCorrection, setApplyCorrection] = useState<Record<number, boolean>>({});
+  const [useStudentMarkedOption, setUseStudentMarkedOption] = useState<Record<number, boolean>>({});
+  const [correctedOption, setCorrectedOption] = useState<Record<number, string>>({});
 
   const pendingQueries = useMemo(() => queries.filter((q) => q.status === "pending"), [queries]);
   const answeredQueries = useMemo(() => queries.filter((q) => q.status === "answered"), [queries]);
@@ -76,6 +82,9 @@ export default function FacultyQueriesPage() {
         list.map((q) => [q.id, q.faculty_response ?? ""]),
       ),
     );
+    setApplyCorrection(Object.fromEntries(list.map((q) => [q.id, false])));
+    setUseStudentMarkedOption(Object.fromEntries(list.map((q) => [q.id, true])));
+    setCorrectedOption(Object.fromEntries(list.map((q) => [q.id, ""])));
     setLoading(false);
   };
 
@@ -104,7 +113,12 @@ export default function FacultyQueriesPage() {
         "Content-Type": "application/json",
         "x-session-token": token,
       },
-      body: JSON.stringify({ answer }),
+      body: JSON.stringify({
+        answer,
+        apply_key_correction: !!applyCorrection[query.id],
+        use_student_marked_option: !!useStudentMarkedOption[query.id],
+        corrected_option: correctedOption[query.id] || null,
+      }),
     }).catch(() => null);
     setSavingId(null);
 
@@ -177,8 +191,55 @@ export default function FacultyQueriesPage() {
                 </div>
 
                 <div className="space-y-1 text-sm">
-                  <p className="text-zinc-400">Student marked correct option:</p>
+                  <p className="text-zinc-400">Student suggested correct option:</p>
                   <p className="text-zinc-200">{q.student_correct_option || "-"}</p>
+                </div>
+
+                <div className="space-y-1 text-sm">
+                  <p className="text-zinc-400">Student marked option in exam:</p>
+                  <p className="text-zinc-200">{q.student_marked_option || "Not answered"}</p>
+                </div>
+
+                <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+                  <label className="flex items-center gap-2 text-xs text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={!!applyCorrection[q.id]}
+                      onChange={(e) => setApplyCorrection((prev) => ({ ...prev, [q.id]: e.target.checked }))}
+                      className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-yellow-500"
+                    />
+                    Update official answer key (scores update automatically)
+                  </label>
+
+                  {applyCorrection[q.id] && (
+                    <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
+                      <label className="flex items-center gap-2 text-xs text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={!!useStudentMarkedOption[q.id]}
+                          onChange={(e) => setUseStudentMarkedOption((prev) => ({ ...prev, [q.id]: e.target.checked }))}
+                          className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-yellow-500"
+                        />
+                        Use student marked option ({q.student_marked_option || "N/A"}) as corrected answer
+                      </label>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-zinc-400">Or choose corrected option:</label>
+                        <select
+                          value={correctedOption[q.id] ?? ""}
+                          onChange={(e) => setCorrectedOption((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                          disabled={!!useStudentMarkedOption[q.id]}
+                          className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 disabled:opacity-50"
+                        >
+                          <option value="">Select</option>
+                          <option value="A">A</option>
+                          <option value="B">B</option>
+                          <option value="C">C</option>
+                          <option value="D">D</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -255,9 +316,21 @@ export default function FacultyQueriesPage() {
                     </div>
 
                     <div className="space-y-1 text-sm">
+                      <p className="text-zinc-400">Student marked option in exam:</p>
+                      <p className="text-zinc-200">{q.student_marked_option || "Not answered"}</p>
+                    </div>
+
+                    <div className="space-y-1 text-sm">
                       <p className="text-zinc-400">Faculty response:</p>
                       <p className="whitespace-pre-wrap text-zinc-200">{q.faculty_response || "-"}</p>
                     </div>
+
+                    {q.answer_key_corrected && (
+                      <div className="space-y-1 text-sm">
+                        <p className="text-zinc-400">Answer key corrected:</p>
+                        <p className="text-emerald-300">Yes{q.corrected_option ? ` · Correct option: ${q.corrected_option}` : ""}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

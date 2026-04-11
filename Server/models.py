@@ -87,6 +87,9 @@ class FlagQuestionRequest(BaseModel):
 
 class AnswerFlaggedQuestionRequest(BaseModel):
     answer: str
+    apply_key_correction: Optional[bool] = False
+    corrected_option: Optional[str] = None
+    use_student_marked_option: Optional[bool] = False
 
 class RetakeRequest(BaseModel):
     user_id: int

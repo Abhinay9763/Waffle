@@ -319,6 +319,23 @@ def _compute_total_marks_for_submission(response: dict, questions_data: dict, fa
     return total if total > 0 else fallback_total
 
 
+def _option_idx_to_letter(idx: int | None) -> str | None:
+    if not isinstance(idx, int):
+        return None
+    if 0 <= idx <= 3:
+        return chr(ord("A") + idx)
+    return None
+
+
+def _option_letter_to_idx(letter: str | None) -> int | None:
+    if not isinstance(letter, str):
+        return None
+    raw = letter.strip().upper()
+    if raw in {"A", "B", "C", "D"}:
+        return ord(raw) - ord("A")
+    return None
+
+
 def _is_exam_response_released(exam: dict, release_state: dict) -> bool:
     if release_state.get("released_manually"):
         return True
@@ -659,6 +676,18 @@ async def flagMyQuestion(response_id: int, body: FlagQuestionRequest, user=Depen
     if body.question_id not in valid_qids:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question not found in this response.")
 
+    chosen_option_idx = None
+    for item in submission.get("responses", []):
+        if not isinstance(item, dict):
+            continue
+        if item.get("question_id") == body.question_id:
+            opt = item.get("option")
+            if isinstance(opt, int):
+                chosen_option_idx = opt
+            break
+
+    chosen_option_letter = _option_idx_to_letter(chosen_option_idx)
+
     payload = {
         "response_id": response_id,
         "exam_id": exam.get("id"),
@@ -667,6 +696,7 @@ async def flagMyQuestion(response_id: int, body: FlagQuestionRequest, user=Depen
         "why_is_this_wrong": why_wrong,
         "what_should_be_correct": expected_answer,
         "correct_option": correct_option,
+        "student_marked_option": chosen_option_letter,
     }
 
     row_to_insert = {
@@ -737,9 +767,12 @@ async def getFacultyQuestionQueries(user=Depends(get_current_user)):
             "why_wrong": payload.get("why_is_this_wrong") or "",
             "expected_answer": payload.get("what_should_be_correct") or "",
             "student_correct_option": payload.get("correct_option") or "",
+            "student_marked_option": payload.get("student_marked_option") or "",
             "faculty_response": faculty_answer,
             "status": "answered" if faculty_answer else "pending",
             "answered_at": payload.get("answered_at"),
+            "answer_key_corrected": bool(payload.get("answer_key_corrected")),
+            "corrected_option": payload.get("corrected_option") or "",
             "created_at": row.get("created_at"),
             "student_name": student.get("name") or "",
             "student_roll": student.get("roll") or "",
@@ -794,6 +827,63 @@ async def answerFacultyQuestionQuery(query_id: int, body: AnswerFlaggedQuestionR
     payload["faculty_response"] = answer
     payload["answered_at"] = datetime.now(timezone.utc).isoformat()
     payload["answered_by"] = user.get("name") or "Faculty"
+
+    should_apply_correction = bool(body.apply_key_correction)
+    if should_apply_correction:
+        chosen = _option_letter_to_idx(body.corrected_option)
+
+        if bool(body.use_student_marked_option):
+            student_marked_letter = payload.get("student_marked_option") or payload.get("correct_option")
+            chosen = _option_letter_to_idx(str(student_marked_letter) if student_marked_letter is not None else None)
+
+        if chosen is None:
+            raise HTTPException(status_code=400, detail="Choose a valid corrected option (A-D) or use student's marked option.")
+
+        exam_id = payload.get("exam_id")
+        question_id = payload.get("question_id")
+        if not isinstance(exam_id, int) or not isinstance(question_id, int):
+            raise HTTPException(status_code=400, detail="Query payload is missing exam/question reference.")
+
+        exam_res = await db.client.table("Exams") \
+            .select("id,questionpaper_id,creator_id") \
+            .eq("id", exam_id) \
+            .eq("creator_id", user["id"]) \
+            .limit(1) \
+            .execute()
+        if not exam_res.data:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found for this query.")
+
+        paper_id = exam_res.data[0].get("questionpaper_id")
+        if not isinstance(paper_id, int):
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found for this query.")
+
+        paper_res = await db.client.table("QuestionPapers") \
+            .select("id,answers") \
+            .eq("id", paper_id) \
+            .limit(1) \
+            .execute()
+        if not paper_res.data:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found.")
+
+        answers = paper_res.data[0].get("answers") or {}
+        if not isinstance(answers, dict):
+            answers = {}
+        answers[str(question_id)] = chosen
+
+        await db.client.table("QuestionPapers") \
+            .update({"answers": answers}) \
+            .eq("id", paper_id) \
+            .execute()
+
+        payload["answer_key_corrected"] = True
+        payload["corrected_option"] = _option_idx_to_letter(chosen)
+        payload["corrected_questionpaper_id"] = paper_id
+
+        await db.client.table("ExamLogs").insert({
+            "exam_id": exam_id,
+            "user_id": user["id"],
+            "event": "answer_key_corrected",
+        }).execute()
 
     await db.client.table(table_name) \
         .update({"payload": payload}) \
