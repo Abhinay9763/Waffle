@@ -6,6 +6,7 @@ from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_503_SERVICE_UNAVAILABLE
 
 from memory_cache import get_cache, set_cache
 from supa import db
+from temp_invite_cache import get_invite_session
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,10 @@ def _validate_cached_or_db_payload(payload: dict) -> dict:
 
 
 async def get_current_user(x_session_token: str = Header()):
+    invite_session = await get_invite_session(x_session_token)
+    if isinstance(invite_session, dict):
+        return _validate_cached_or_db_payload(invite_session)
+
     cache_key = _cache_key_for_token(x_session_token)
 
     cached = await get_cache(cache_key)

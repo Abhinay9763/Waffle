@@ -94,6 +94,14 @@ class AnswerFlaggedQuestionRequest(BaseModel):
 class RetakeRequest(BaseModel):
     user_id: int
 
+
+class InviteLaunchRequest(BaseModel):
+    roll: str
+
+
+class InviteRollPreviewRequest(BaseModel):
+    roll: str
+
 class Session(BaseModel):
     user_id : int
     expiry : datetime

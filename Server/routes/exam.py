@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 import json
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -11,8 +12,18 @@ from starlette.status import HTTP_201_CREATED, HTTP_403_FORBIDDEN, HTTP_404_NOT_
 
 from deps import get_current_user
 from memory_cache import delete_cache, get_cache, set_cache
-from models import Exam, RetakeRequest
+from models import Exam, RetakeRequest, InviteLaunchRequest, InviteRollPreviewRequest
 from supa import db
+from config import FRONTEND_URL
+from utils import serializer, createSessionToken
+from temp_invite_cache import (
+    INVITE_GRACE_SECONDS,
+    expiry_for_exam,
+    get_invite_record,
+    list_invite_records,
+    set_invite_session,
+)
+from student_dataset import student_public_profile
 
 router = APIRouter()
 
@@ -20,6 +31,38 @@ EXAM_CACHE_TTL_SECONDS = 120
 PAPER_CACHE_TTL_SECONDS = 600
 EXAM_AVAILABLE_CACHE_TTL_SECONDS = 20
 _exam_available_cache_version = 1
+INVITE_TOKEN_MAX_AGE_SECONDS = int(os.getenv("EXAM_INVITE_MAX_AGE_SECONDS", "43200"))
+INVITE_POST_EXAM_GRACE_SECONDS = int(os.getenv("EXAM_INVITE_POST_EXAM_GRACE_SECONDS", str(INVITE_GRACE_SECONDS)))
+ROLL_FORMAT_RE = re.compile(r"^[0-9]{2}[A-Za-z][0-9]{2}[A-Za-z][0-9]{4}$")
+
+
+def _normalize_roll(value: str) -> str:
+    return (value or "").strip().upper()
+
+
+def _is_valid_roll(value: str) -> bool:
+    return bool(ROLL_FORMAT_RE.fullmatch(value or ""))
+
+
+def _parse_invite_token(token: str) -> dict:
+    try:
+        payload = serializer.loads(
+            token,
+            salt="exam-invite",
+            max_age=max(60, INVITE_TOKEN_MAX_AGE_SECONDS),
+        )
+    except Exception:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid or expired invite link.")
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid invite payload.")
+
+    exam_id = payload.get("exam_id")
+    creator_id = payload.get("creator_id")
+    if not isinstance(exam_id, int) or not isinstance(creator_id, int):
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid invite payload.")
+
+    return payload
 
 
 @lru_cache(maxsize=1)
@@ -399,6 +442,145 @@ async def _invalidate_exam_cache(exam_id: int) -> None:
     _exam_available_cache_version += 1
 
 
+@router.post("/exam/{exam_id}/invite-link")
+async def createExamInviteLink(exam_id: int, user=Depends(get_current_user)):
+    exam = await _get_exam_core(exam_id)
+    if not exam or exam.get("creator_id") != user["id"]:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    payload = {
+        "exam_id": exam_id,
+        "creator_id": user["id"],
+        "issued_at": datetime.now(timezone.utc).isoformat(),
+    }
+    token = serializer.dumps(payload, salt="exam-invite")
+    link = f"{FRONTEND_URL.rstrip('/')}/invite/{token}"
+    return {
+        "link": link,
+        "token": token,
+        "exam_id": exam_id,
+        "expires_in_seconds": max(60, INVITE_TOKEN_MAX_AGE_SECONDS),
+    }
+
+
+@router.get("/exam/invite/{token}")
+async def inspectExamInvite(token: str):
+    payload = _parse_invite_token(token)
+    exam_id = int(payload["exam_id"])
+
+    exam = await _get_exam_core(exam_id)
+    if not exam:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    end = datetime.fromisoformat(str(exam.get("end", "")).replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > end:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Exam has ended.")
+
+    return {
+        "exam": {
+            "id": exam.get("id"),
+            "name": exam.get("name"),
+            "start": exam.get("start"),
+            "end": exam.get("end"),
+        }
+    }
+
+
+@router.post("/exam/invite/{token}/launch")
+async def launchExamInvite(token: str, body: InviteLaunchRequest):
+    payload = _parse_invite_token(token)
+    exam_id = int(payload["exam_id"])
+
+    roll = _normalize_roll(body.roll)
+    if not _is_valid_roll(roll):
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="Roll must be in format like 25K81A0561.",
+        )
+
+    exam = await _get_exam_core(exam_id)
+    if not exam:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    now = datetime.now(timezone.utc)
+    start = datetime.fromisoformat(str(exam.get("start", "")).replace("Z", "+00:00"))
+    end = datetime.fromisoformat(str(exam.get("end", "")).replace("Z", "+00:00"))
+    if now > end:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Exam has ended.")
+
+    # Respect section access policy based on roll.
+    student_section = _derive_student_section_from_roll(roll)
+    if not _is_section_allowed(exam.get("allowed_sections"), student_section):
+        raise HTTPException(
+            status_code=HTTP_403_FORBIDDEN,
+            detail="This exam is not available for your section.",
+        )
+
+    join_window = exam.get("join_window")
+    if join_window is not None:
+        cutoff = start + timedelta(minutes=join_window)
+        if now > cutoff:
+            raise HTTPException(
+                status_code=HTTP_403_FORBIDDEN,
+                detail=f"Join window closed. Students could only join within {join_window} minute(s) of the exam starting.",
+            )
+
+    existing = await get_invite_record(exam_id, roll)
+    if existing and existing.get("status") == "submitted":
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="You have already submitted this exam.")
+
+    profile = student_public_profile(roll)
+    if not profile:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="please enter correct roll number")
+
+    session_token = createSessionToken()
+    invite_expiry_dt = expiry_for_exam(str(exam.get("end", "")), INVITE_POST_EXAM_GRACE_SECONDS)
+    invite_expiry_iso = invite_expiry_dt.isoformat()
+    invite_user = {
+        "id": f"invite:{exam_id}:{roll}",
+        "name": str(profile.get("Name") or f"Student {roll}"),
+        "roll": str(profile.get("Roll") or roll),
+        "pic": str(profile.get("Pic") or ""),
+        "branch": str(profile.get("Branch") or ""),
+        "role": "Student",
+        "approval_status": "approved",
+        "auth_mode": "invite_temp",
+        "invite_exam_id": exam_id,
+        "invite_expires_at": invite_expiry_iso,
+    }
+    await set_invite_session(session_token, invite_user, invite_expiry_iso)
+
+    return {
+        "token": session_token,
+        "exam_id": exam_id,
+        "user": {
+            "name": invite_user["name"],
+            "roll": invite_user["roll"],
+            "pic": invite_user["pic"],
+            "branch": invite_user["branch"],
+            "role": "Student",
+        },
+        "redirect": f"/exam/{exam_id}/normal",
+    }
+
+
+@router.post("/exam/invite/{token}/preview-roll")
+async def previewInviteRoll(token: str, body: InviteRollPreviewRequest):
+    _ = _parse_invite_token(token)
+    roll = _normalize_roll(body.roll)
+    if not _is_valid_roll(roll):
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="Roll must be in format like 25K81A0561.",
+        )
+
+    profile = student_public_profile(roll)
+    if not profile:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="please enter correct roll number")
+
+    return {"student": profile}
+
+
 @router.post("/exam/create", status_code=HTTP_201_CREATED)
 async def createExam(exam: Exam, user=Depends(get_current_user)):
     data = exam.model_dump(exclude={"id", "created_at"})
@@ -531,14 +713,21 @@ async def takeExam(exam_id: int, user=Depends(get_current_user)):
                 detail=f"Join window closed. Students could only join within {join_window} minute(s) of the exam starting.",
             )
 
-    submitted = await db.client.table("Responses") \
-        .select("id") \
-        .eq("exam_id", exam_id) \
-        .eq("user_id", user["id"]) \
-        .eq("status", "submitted") \
-        .execute()
-    if submitted.data:
-        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="You have already submitted this exam.")
+    if user.get("auth_mode") == "invite_temp":
+        if int(user.get("invite_exam_id") or -1) != exam_id:
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Invite session is valid only for its assigned exam.")
+        temp_record = await get_invite_record(exam_id, str(user.get("roll", "")))
+        if temp_record and temp_record.get("status") == "submitted":
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="You have already submitted this exam.")
+    else:
+        submitted = await db.client.table("Responses") \
+            .select("id") \
+            .eq("exam_id", exam_id) \
+            .eq("user_id", user["id"]) \
+            .eq("status", "submitted") \
+            .execute()
+        if submitted.data:
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="You have already submitted this exam.")
 
     paper = await _get_paper_questions(exam["questionpaper_id"])
     if not paper:
@@ -870,17 +1059,43 @@ async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
         .order("submitted_at") \
         .execute()
 
+    temp_records = await list_invite_records(exam_id)
+
     # 4. Compute score per response
     scored = []
     for r in resp_res.data:
+        row_user = r.get("Users") or {}
+        row_roll = str(row_user.get("roll") or "")
+        profile = student_public_profile(row_roll)
         score = compute_score(r["response"], paper["answers"], paper["questions"])
         scored.append({
             "id": r["id"],
             "submitted_at": r["submitted_at"],
-            "student_name": r["Users"]["name"],
-            "student_roll": r["Users"]["roll"],
+            "student_name": str((profile or {}).get("Name") or row_user.get("name") or ""),
+            "student_roll": str((profile or {}).get("Roll") or row_roll),
+            "student_pic": str((profile or {}).get("Pic") or ""),
+            "student_branch": str((profile or {}).get("Branch") or ""),
             "score": score,
         })
+
+    temp_id = -1
+    for r in temp_records:
+        if r.get("status") != "submitted":
+            continue
+        response_payload = r.get("response") or {"responses": []}
+        score = compute_score(response_payload, paper["answers"], paper["questions"])
+        scored.append({
+            "id": temp_id,
+            "submitted_at": r.get("submitted_at"),
+            "student_name": r.get("student_name") or f"Student {r.get('student_roll', '')}",
+            "student_roll": r.get("student_roll") or "",
+            "student_pic": r.get("student_pic") or "",
+            "student_branch": r.get("student_branch") or "",
+            "score": score,
+        })
+        temp_id -= 1
+
+    scored.sort(key=lambda row: str(row.get("submitted_at") or ""))
 
     scores = [s["score"] for s in scored]
     summary = {
@@ -912,7 +1127,27 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
         .in_("status", ["in_progress", "submitted"]) \
         .execute()
 
-    active, idle, submitted = _build_live_buckets(resp_res.data, total_questions, countable_qids)
+    temp_records = await list_invite_records(exam_id)
+    temp_rows = []
+    for r in temp_records:
+        status = r.get("status")
+        if status not in {"in_progress", "submitted"}:
+            continue
+        temp_rows.append({
+            "status": status,
+            "last_seen_at": r.get("last_seen_at"),
+            "submitted_at": r.get("submitted_at"),
+            "user_id": f"invite:{r.get('student_roll', '')}",
+            "response": r.get("response") or {"responses": []},
+            "Users": {
+                "name": r.get("student_name") or f"Student {r.get('student_roll', '')}",
+                "roll": r.get("student_roll") or "",
+                "pic": r.get("student_pic") or "",
+                "branch": r.get("student_branch") or "",
+            },
+        })
+
+    active, idle, submitted = _build_live_buckets((resp_res.data or []) + temp_rows, total_questions, countable_qids)
 
     exam_payload = {
         **exam,
@@ -941,11 +1176,38 @@ async def getExamLogs(
         .eq("exam_id", exam_id)
     if since:
         query = query.gt("created_at", since)
-        logs = await query.order("created_at", desc=False).limit(200).execute()
+        logs_res = await query.order("created_at", desc=False).limit(200).execute()
     else:
-        logs = await query.order("created_at", desc=True).limit(100).execute()
+        logs_res = await query.order("created_at", desc=True).limit(100).execute()
+
+    db_logs = logs_res.data or []
+    temp_records = await list_invite_records(exam_id)
+    temp_logs = []
+    for rec in temp_records:
+        for ev in (rec.get("events") or []):
+            created_at = str(ev.get("created_at") or "")
+            if since and created_at <= since:
+                continue
+            temp_logs.append({
+                "event": ev.get("event"),
+                "created_at": created_at,
+                "Users": {
+                    "name": rec.get("student_name") or f"Student {rec.get('student_roll', '')}",
+                    "roll": rec.get("student_roll") or "",
+                    "pic": rec.get("student_pic") or "",
+                    "branch": rec.get("student_branch") or "",
+                },
+            })
+
+    logs = db_logs + temp_logs
+    logs.sort(key=lambda item: str(item.get("created_at") or ""), reverse=not bool(since))
+    if since:
+        logs = logs[:200]
+    else:
+        logs = logs[:100]
+
     return JSONResponse(
-        content={"logs": logs.data},
+        content={"logs": logs},
         headers={"Cache-Control": "no-store"},
     )
 
@@ -971,7 +1233,27 @@ async def getExamSnapshot(
         .in_("status", ["in_progress", "submitted"]) \
         .execute()
 
-    active, idle, submitted = _build_live_buckets(resp_res.data, total_questions, countable_qids)
+    temp_records = await list_invite_records(exam_id)
+    temp_rows = []
+    for r in temp_records:
+        status = r.get("status")
+        if status not in {"in_progress", "submitted"}:
+            continue
+        temp_rows.append({
+            "status": status,
+            "last_seen_at": r.get("last_seen_at"),
+            "submitted_at": r.get("submitted_at"),
+            "user_id": f"invite:{r.get('student_roll', '')}",
+            "response": r.get("response") or {"responses": []},
+            "Users": {
+                "name": r.get("student_name") or f"Student {r.get('student_roll', '')}",
+                "roll": r.get("student_roll") or "",
+                "pic": r.get("student_pic") or "",
+                "branch": r.get("student_branch") or "",
+            },
+        })
+
+    active, idle, submitted = _build_live_buckets((resp_res.data or []) + temp_rows, total_questions, countable_qids)
 
     log_query = db.client.table("ExamLogs") \
         .select("event,created_at,Users(name,roll)") \
@@ -983,6 +1265,29 @@ async def getExamSnapshot(
         logs_res = await log_query.order("created_at", desc=True).limit(100).execute()
 
     logs = logs_res.data or []
+    temp_logs = []
+    for rec in temp_records:
+        for ev in (rec.get("events") or []):
+            created_at = str(ev.get("created_at") or "")
+            if since and created_at <= since:
+                continue
+            temp_logs.append({
+                "event": ev.get("event"),
+                "created_at": created_at,
+                "Users": {
+                    "name": rec.get("student_name") or f"Student {rec.get('student_roll', '')}",
+                    "roll": rec.get("student_roll") or "",
+                    "pic": rec.get("student_pic") or "",
+                    "branch": rec.get("student_branch") or "",
+                },
+            })
+
+    logs = logs + temp_logs
+    logs.sort(key=lambda item: str(item.get("created_at") or ""), reverse=not bool(since))
+    if since:
+        logs = logs[:200]
+    else:
+        logs = logs[:100]
     last_log_at = logs[-1]["created_at"] if logs and since else (logs[0]["created_at"] if logs else None)
 
     exam_payload = {

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { getCookie } from "cookies-next";
 import { useParams } from "next/navigation";
 import {
-  Loader2, RefreshCw, Radio, CheckCircle2, Clock3, RotateCcw, AlertCircle, StopCircle,
+  Loader2, RefreshCw, Radio, CheckCircle2, Clock3, RotateCcw, AlertCircle, StopCircle, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { API } from "@/lib/config";
@@ -106,6 +106,7 @@ export default function LiveControlCentre() {
   const [stopping, setStopping] = useState(false);
   const [retakeTarget, setRetakeTarget] = useState<{ userId: number; studentName: string } | null>(null);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [creatingInvite, setCreatingInvite] = useState(false);
   const [, tick] = useState(0); // forces 1s re-render for live countdowns
 
   const token = useRef<string>("");
@@ -239,6 +240,41 @@ export default function LiveControlCentre() {
     setShowStopConfirm(true);
   }, [stopping]);
 
+  const handleShareInvite = useCallback(async () => {
+    if (creatingInvite || !exam?.can_manage) return;
+    setCreatingInvite(true);
+    try {
+      const res = await fetch(`${API}/exam/${examId}/invite-link`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "x-session-token": token.current },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body?.detail ?? "Could not generate invite link.");
+        return;
+      }
+
+      const body = await res.json();
+      const link = String(body?.link || "").trim();
+      if (!link) {
+        toast.error("Invite link was empty.");
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(link);
+        toast.success("Invite link copied.");
+      } catch {
+        window.prompt("Copy this invite link", link);
+      }
+    } catch {
+      toast.error("Failed to fetch. Check backend server/network and try again.");
+    } finally {
+      setCreatingInvite(false);
+    }
+  }, [creatingInvite, exam?.can_manage, examId]);
+
   const total = active.length + idle.length + submitted.length;
   const blindModeByRoll = useMemo(() => {
     const byRoll: Record<string, boolean> = {};
@@ -335,6 +371,18 @@ export default function LiveControlCentre() {
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
+          {exam.can_manage && new Date(exam.end) > new Date() && (
+            <button
+              onClick={handleShareInvite}
+              disabled={creatingInvite}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-sky-900/60 text-sky-300 hover:bg-sky-950/40 hover:border-sky-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {creatingInvite
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <Link2 className="w-3 h-3" />}
+              {creatingInvite ? "Creating…" : "Share link"}
+            </button>
+          )}
           {exam.can_manage && new Date(exam.end) > new Date() && (
             <button
               onClick={handleStop}

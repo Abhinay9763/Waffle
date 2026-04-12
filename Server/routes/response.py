@@ -9,6 +9,7 @@ from starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND
 from deps import get_current_user
 from models import Heartbeat, Submit, FlagQuestionRequest, AnswerFlaggedQuestionRequest
 from supa import db
+from temp_invite_cache import get_invite_record, upsert_invite_record
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -423,6 +424,49 @@ def _filter_questions_by_scope(questions_data: dict, scope_ids: set[int] | None)
 @router.post("/response/heartbeat", status_code=HTTP_200_OK)
 async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
     """Queue heartbeats and persist in short batches to reduce write pressure."""
+    if user.get("auth_mode") == "invite_temp":
+        invite_exam_id = int(user.get("invite_exam_id") or -1)
+        if invite_exam_id != hb.exam_id:
+            raise HTTPException(status_code=403, detail="Invite session is valid only for its assigned exam.")
+
+        invite_expiry = str(user.get("invite_expires_at") or "")
+        if not invite_expiry:
+            raise HTTPException(status_code=401, detail="Invite session expired.")
+
+        roll = str(user.get("roll", ""))
+        name = str(user.get("name") or f"Student {roll}")
+        pic = str(user.get("pic") or "")
+        branch = str(user.get("branch") or "")
+        existing = await get_invite_record(hb.exam_id, roll)
+        base_response = (existing or {}).get("response") or {"student_roll": roll, "responses": []}
+
+        if hb.response is not None:
+            next_response = hb.response
+        elif hb.response_delta:
+            next_response = _merge_response_delta(base_response, hb.response_delta)
+        else:
+            next_response = base_response
+
+        last_seen_at = datetime.now(timezone.utc).isoformat()
+        event_payload = [
+            {"event": ev, "created_at": last_seen_at}
+            for ev in _extract_policy_events(hb.events)
+        ]
+        await upsert_invite_record(
+            exam_id=hb.exam_id,
+            roll=roll,
+            student_name=name,
+            student_pic=pic,
+            student_branch=branch,
+            response=next_response,
+            status="submitted" if (existing or {}).get("status") == "submitted" else "in_progress",
+            expiry_iso=invite_expiry,
+            submitted_at=(existing or {}).get("submitted_at"),
+            last_seen_at=last_seen_at,
+            append_events=event_payload,
+        )
+        return {"msg": "queued"}
+
     key = (hb.exam_id, int(user["id"]))
     async with _pending_lock:
         _pending_heartbeats[key] = _merge_queued_heartbeat(_pending_heartbeats.get(key), hb)
@@ -432,6 +476,39 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
 @router.post("/response/submit", status_code=HTTP_200_OK)
 async def submitResponse(sub: Submit, user=Depends(get_current_user)):
     """Finalise the exam — called once on submit or when time runs out."""
+    if user.get("auth_mode") == "invite_temp":
+        invite_exam_id = int(user.get("invite_exam_id") or -1)
+        if invite_exam_id != sub.exam_id:
+            raise HTTPException(status_code=403, detail="Invite session is valid only for its assigned exam.")
+
+        invite_expiry = str(user.get("invite_expires_at") or "")
+        if not invite_expiry:
+            raise HTTPException(status_code=401, detail="Invite session expired.")
+
+        roll = str(user.get("roll", ""))
+        name = str(user.get("name") or f"Student {roll}")
+        pic = str(user.get("pic") or "")
+        branch = str(user.get("branch") or "")
+        existing = await get_invite_record(sub.exam_id, roll)
+        if existing and existing.get("status") == "submitted":
+            return {"msg": "Response already submitted."}
+
+        now = datetime.now(timezone.utc).isoformat()
+        await upsert_invite_record(
+            exam_id=sub.exam_id,
+            roll=roll,
+            student_name=name,
+            student_pic=pic,
+            student_branch=branch,
+            response=sub.response,
+            status="submitted",
+            expiry_iso=invite_expiry,
+            submitted_at=now,
+            last_seen_at=now,
+            append_events=[{"event": "submitted", "created_at": now}],
+        )
+        return {"msg": "Response submitted."}
+
     pending = await _pop_single_pending(sub.exam_id, int(user["id"]))
     if pending:
         try:
@@ -471,6 +548,60 @@ async def submitResponse(sub: Submit, user=Depends(get_current_user)):
 @router.get("/response/my", status_code=HTTP_200_OK)
 async def getMyResponses(user=Depends(get_current_user)):
     """All finalised submissions by the current student, with computed scores."""
+    if user.get("auth_mode") == "invite_temp":
+        exam_id = int(user.get("invite_exam_id") or -1)
+        roll = str(user.get("roll", ""))
+        rec = await get_invite_record(exam_id, roll)
+        if not rec or rec.get("status") != "submitted":
+            return {"responses": []}
+
+        exam_res = await db.client.table("Exams") \
+            .select("id,name,total_marks,start,end,questionpaper_id") \
+            .eq("id", exam_id) \
+            .limit(1) \
+            .execute()
+        exam = exam_res.data[0] if exam_res.data else None
+        if not exam:
+            return {"responses": []}
+
+        paper_res = await db.client.table("QuestionPapers") \
+            .select("id,questions,answers") \
+            .eq("id", exam.get("questionpaper_id")) \
+            .limit(1) \
+            .execute()
+        paper = paper_res.data[0] if paper_res.data else {}
+
+        response_payload = rec.get("response") or {}
+        score = _compute_score(
+            response_payload,
+            paper.get("answers", {}),
+            paper.get("questions", {}),
+        ) if paper else 0
+        effective_total = _compute_total_marks_for_submission(
+            response_payload,
+            paper.get("questions", {}),
+            exam.get("total_marks") or 1,
+        ) if paper else (exam.get("total_marks") or 1)
+        total_for_pct = effective_total or 1
+
+        return {
+            "responses": [
+                {
+                    "id": 900000000 + exam_id,
+                    "submitted_at": rec.get("submitted_at"),
+                    "exam_id": exam_id,
+                    "exam_name": exam.get("name"),
+                    "exam_start": exam.get("start"),
+                    "exam_end": exam.get("end"),
+                    "score": score,
+                    "total_marks": effective_total,
+                    "percentage": round(score / total_for_pct * 100, 1),
+                    "responses_released": True,
+                    "release_after_exam": False,
+                }
+            ]
+        }
+
     resp_res = await db.client.table("Responses") \
         .select("id,submitted_at,response,Exams(id,name,total_marks,start,end,questionpaper_id)") \
         .eq("user_id", user["id"]) \
@@ -527,6 +658,103 @@ async def getMyResponses(user=Depends(get_current_user)):
 @router.get("/response/my/{response_id}", status_code=HTTP_200_OK)
 async def getMyResponseDetail(response_id: int, user=Depends(get_current_user)):
     """Detailed submission view for a student, including correct vs chosen options."""
+    if user.get("auth_mode") == "invite_temp":
+        exam_id = int(user.get("invite_exam_id") or -1)
+        expected_id = 900000000 + exam_id
+        if response_id != expected_id:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Response not found.")
+
+        rec = await get_invite_record(exam_id, str(user.get("roll", "")))
+        if not rec or rec.get("status") != "submitted":
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Response not found.")
+
+        exam_res = await db.client.table("Exams") \
+            .select("id,name,total_marks,start,end,questionpaper_id") \
+            .eq("id", exam_id) \
+            .limit(1) \
+            .execute()
+        if not exam_res.data:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+        exam = exam_res.data[0]
+
+        question_paper_id = exam.get("questionpaper_id")
+        if not question_paper_id:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found for this response.")
+
+        paper_res = await db.client.table("QuestionPapers") \
+            .select("id,questions,answers") \
+            .eq("id", question_paper_id) \
+            .limit(1) \
+            .execute()
+        if not paper_res.data:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Question paper not found.")
+
+        paper = paper_res.data[0]
+        questions_data = paper.get("questions") or {}
+        answers = paper.get("answers") or {}
+        submission = rec.get("response") or {}
+
+        scope_raw = submission.get("grading_scope_question_ids")
+        scope_ids: set[int] | None = None
+        if isinstance(scope_raw, list):
+            scope_ids = {qid for qid in scope_raw if isinstance(qid, int)}
+
+        display_questions = _filter_questions_by_scope(questions_data, scope_ids)
+        submitted_map: dict[int, dict] = {}
+        for item in submission.get("responses", []):
+            qid = item.get("question_id") if isinstance(item, dict) else None
+            if isinstance(qid, int):
+                submitted_map[qid] = {
+                    "question_id": qid,
+                    "option": item.get("option"),
+                    "marked": bool(item.get("marked", False)),
+                }
+
+        review_sections = []
+        for section in display_questions.get("sections", []):
+            questions = []
+            for q in section.get("questions", []):
+                qid = q.get("question_id")
+                if not isinstance(qid, int):
+                    continue
+                correct = answers.get(str(qid)) if str(qid) in answers else answers.get(qid)
+                chosen = submitted_map.get(qid, {}).get("option")
+                questions.append({
+                    **q,
+                    "correct_option": correct,
+                    "chosen_option": chosen,
+                    "marked": bool(submitted_map.get(qid, {}).get("marked", False)),
+                    "is_correct": chosen is not None and correct is not None and chosen == correct,
+                })
+
+            review_sections.append({
+                **section,
+                "questions": questions,
+            })
+
+        score = _compute_score(submission, answers, display_questions)
+        total_marks = _compute_total_marks_for_submission(
+            submission,
+            display_questions,
+            exam.get("total_marks") or 1,
+        )
+        pct_base = total_marks or 1
+
+        return {
+            "response": {
+                "id": response_id,
+                "submitted_at": rec.get("submitted_at"),
+                "exam_id": exam.get("id"),
+                "exam_name": exam.get("name"),
+                "exam_start": exam.get("start"),
+                "exam_end": exam.get("end"),
+                "score": score,
+                "total_marks": total_marks,
+                "percentage": round(score / pct_base * 100, 1),
+                "sections": review_sections,
+            }
+        }
+
     resp_res = await db.client.table("Responses") \
         .select("id,submitted_at,response,exam_id,Exams(id,name,total_marks,start,end,questionpaper_id)") \
         .eq("id", response_id) \

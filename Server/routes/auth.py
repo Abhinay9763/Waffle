@@ -1,8 +1,4 @@
 from datetime import datetime, timedelta, timezone
-import json
-import os
-from functools import lru_cache
-from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from starlette.background import BackgroundTasks
@@ -20,62 +16,9 @@ from utils import hashPassword, verifyPassword, serializer, send_auth_mail_safe,
 from utils import should_allow_email_send
 from deps import get_current_user
 from config import STUDENT_EMAIL_DOMAIN
+from student_dataset import find_student_by_roll, student_public_profile
 
 router = APIRouter()
-
-
-@lru_cache(maxsize=1)
-def _resolve_nrpb_dataset_path() -> Path | None:
-    env_path = (os.getenv("NRPB_DATASET_PATH") or "").strip()
-    candidates = []
-    if env_path:
-        candidates.append(Path(env_path))
-
-    candidates.extend([
-        Path("/etc/secrets/NRPB.json"),
-        Path(__file__).resolve().parents[1] / "datasets" / "NRPB.json",
-    ])
-
-    for candidate in candidates:
-        if candidate.exists() and candidate.is_file():
-            return candidate
-    return None
-
-
-@lru_cache(maxsize=1)
-def _load_nrpb_index() -> dict[str, dict]:
-    dataset_path = _resolve_nrpb_dataset_path()
-    if dataset_path is None:
-        return {}
-    try:
-        with dataset_path.open("r", encoding="utf-8") as f:
-            rows = json.load(f)
-    except Exception:
-        return {}
-
-    index: dict[str, dict] = {}
-    if isinstance(rows, list):
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            roll = str(row.get("Roll", "")).strip().upper()
-            if roll:
-                index[roll] = row
-    return index
-
-
-def _find_student_by_roll(roll: str) -> dict | None:
-    key = (roll or "").strip().upper()
-    if not key:
-        return None
-    return _load_nrpb_index().get(key)
-
-
-def _derive_display_name_from_email(email: str) -> str:
-    local = ((email or "").strip().split("@", 1)[0]).strip()
-    if not local:
-        return ""
-    return local.replace(".", " ").replace("_", " ").replace("-", " ").strip().title()
 
 
 def _derive_student_roll(email: str) -> str | None:
@@ -97,21 +40,14 @@ async def getStudentPreview(payload: StudentPreviewRequest):
             detail=f"Students must use college email in format roll@{STUDENT_EMAIL_DOMAIN}."
         )
 
-    student = _find_student_by_roll(derived_roll)
+    student = student_public_profile(derived_roll)
     if not student:
         raise HTTPException(
             status_code=HTTP_404_NOT_FOUND,
             detail="please enter correct roll number"
         )
 
-    return {
-        "student": {
-            "Name": student.get("Name", ""),
-            "Roll": student.get("Roll", ""),
-            "Pic": student.get("Pic", ""),
-            "Branch": student.get("Branch", ""),
-        }
-    }
+    return {"student": student}
 
 
 @router.post("/user/register",status_code=HTTP_202_ACCEPTED)
@@ -126,7 +62,7 @@ async def register(user : Register,background_tasks : BackgroundTasks):
                     detail=f"Students must register with college email (roll@{STUDENT_EMAIL_DOMAIN})."
                 )
             user.roll = derived_roll
-            student = _find_student_by_roll(user.roll)
+            student = find_student_by_roll(user.roll)
             if not student:
                 raise HTTPException(
                     status_code=HTTP_400_BAD_REQUEST,
@@ -189,7 +125,7 @@ async def activateMail(token : str):
                 status_code=HTTP_400_BAD_REQUEST,
                 detail=f"Students must register with college email (roll@{STUDENT_EMAIL_DOMAIN})."
             )
-        student = _find_student_by_roll(derived_roll)
+        student = find_student_by_roll(derived_roll)
         if not student:
             raise HTTPException(
                 status_code=HTTP_400_BAD_REQUEST,
