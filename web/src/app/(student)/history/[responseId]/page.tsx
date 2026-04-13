@@ -14,11 +14,14 @@ type ReviewQuestion = {
   question_id: number;
   text: string;
   image_url?: string;
+  question_type?: "MCQ" | "FIB" | "TOF";
   options: OptionValue[];
   marks: number;
   negative_marks: number;
   correct_option: number | null;
   chosen_option: number | null;
+  correct_answer_text?: string | null;
+  chosen_answer_text?: string | null;
   marked: boolean;
   is_correct: boolean;
 };
@@ -297,7 +300,7 @@ export default function ResponseDetailPage() {
             <h1 className="truncate text-sm font-semibold text-zinc-100">{data.exam_name}</h1>
             <p className="text-xs text-zinc-500">Submitted {fmtDateTime(data.submitted_at)}</p>
           </div>
-          {activeQuestion && (
+          {activeQuestion && activeQuestion.question_type !== "FIB" && (
             <button
               type="button"
               onClick={() => {
@@ -363,8 +366,31 @@ export default function ResponseDetailPage() {
                   )}
                 </div>
 
+                {activeQuestion.question_type === "FIB" ? (
+                  <div className="space-y-2.5">
+                    <div className="w-full rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+                      <p className="text-xs uppercase tracking-wider text-zinc-500">Your answer</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">
+                        {(activeQuestion.chosen_answer_text ?? "").trim() || "Not answered"}
+                      </p>
+                    </div>
+                    <div className="w-full rounded-xl border border-emerald-700/70 bg-emerald-950/20 p-4">
+                      <p className="text-xs uppercase tracking-wider text-emerald-400">Expected answer</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">
+                        {(activeQuestion.correct_answer_text ?? "").trim() || "Not set"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`rounded border px-2 py-0.5 text-[11px] ${activeQuestion.is_correct
+                        ? "border-emerald-700/60 bg-emerald-950/20 text-emerald-300"
+                        : "border-red-700/60 bg-red-950/20 text-red-300"}`}>
+                        {activeQuestion.is_correct ? "Correct" : "Incorrect"}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
                 <div className="space-y-2.5">
-                  {activeQuestion.options.map((opt, idx) => {
+                  {activeQuestion.options.slice(0, activeQuestion.question_type === "TOF" ? 2 : 4).map((opt, idx) => {
                     const isCorrect = idx === activeQuestion.correct_option;
                     const isChosen = idx === activeQuestion.chosen_option;
                     const isWrongChosen = isChosen && !activeQuestion.is_correct;
@@ -403,6 +429,7 @@ export default function ResponseDetailPage() {
                     );
                   })}
                 </div>
+                )}
               </div>
             )}
           </section>

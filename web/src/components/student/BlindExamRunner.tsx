@@ -60,6 +60,11 @@ function hasImageContent(question: ExamStructure["sections"][number]["questions"
   ));
 }
 
+function isBlindTypeSupported(question: ExamStructure["sections"][number]["questions"][number]): boolean {
+  const t = question.question_type || "MCQ";
+  return t === "MCQ" || t === "TOF";
+}
+
 function parseBlindCommand(input: string): string | null {
   const text = input.trim().toLowerCase();
 
@@ -88,7 +93,7 @@ function parseBlindCommand(input: string): string | null {
 export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const router = useRouter();
   const allQuestions = useMemo(() => exam.sections.flatMap((s) => s.questions), [exam.sections]);
-  const questions = useMemo(() => allQuestions.filter((q) => !hasImageContent(q)), [allQuestions]);
+  const questions = useMemo(() => allQuestions.filter((q) => !hasImageContent(q) && isBlindTypeSupported(q)), [allQuestions]);
   const hiddenQuestionCount = allQuestions.length - questions.length;
   const blindTotalMarks = useMemo(
     () => questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0),
@@ -159,7 +164,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const activeResponse = active ? responses[active.question_id] : undefined;
 
   const answeredCount = useMemo(
-    () => Object.values(responses).filter((r) => r.option !== null).length,
+    () => Object.values(responses).filter((r) => r.option !== null || (r.answer_text ?? "").trim().length > 0).length,
     [responses],
   );
 
@@ -320,7 +325,16 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const setAnswer = useCallback((questionId: number, option: number | null) => {
     setResponses((prev) => {
       const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
-      const next = { ...curr, option };
+      const next = { ...curr, option, answer_text: option === null ? curr.answer_text : "" };
+      pendingDeltaRef.current[questionId] = next;
+      return { ...prev, [questionId]: next };
+    });
+  }, []);
+
+  const setAnswerText = useCallback((questionId: number, answerText: string) => {
+    setResponses((prev) => {
+      const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
+      const next = { ...curr, option: null, answer_text: answerText };
       pendingDeltaRef.current[questionId] = next;
       return { ...prev, [questionId]: next };
     });
@@ -398,7 +412,9 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
       if (cmd.startsWith("OPTION_")) {
         const letter = cmd.split("_")[1];
         const idx = OPTION_LETTERS.indexOf(letter);
-        if (idx < 0 || idx >= (active?.options.length ?? 0)) {
+        const qType = active?.question_type || "MCQ";
+        const optionLimit = qType === "TOF" ? 2 : (active?.options.length ?? 0);
+        if (idx < 0 || idx >= optionLimit) {
           speakBlindText("Invalid option for this question.");
           return;
         }
@@ -1286,14 +1302,19 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
             <QuestionView
               question={active}
               selected={activeResponse?.option ?? null}
+              answerText={activeResponse?.answer_text ?? ""}
               onChoose={(idx) => setAnswer(active.question_id, idx)}
+              onAnswerText={(text) => setAnswerText(active.question_id, text)}
               disabled={uiLockedByBlind}
             />
 
             <div className="mt-6 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setAnswer(active.question_id, null)}
+                onClick={() => {
+                  setAnswer(active.question_id, null);
+                  setAnswerText(active.question_id, "");
+                }}
                 disabled={uiLockedByBlind}
                 tabIndex={uiLockedByBlind ? -1 : 0}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:border-zinc-500"

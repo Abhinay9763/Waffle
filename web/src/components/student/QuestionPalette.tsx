@@ -44,12 +44,13 @@ export default function QuestionPalette({
               {section.questions.map((question) => {
                 displayNumber += 1;
                 const r = responses[question.question_id];
+                const isAnswered = !!r && (r.option !== null || (r.answer_text ?? "").trim().length > 0);
                 const state = r
-                  ? r.marked && r.option !== null
+                  ? r.marked && isAnswered
                     ? "both"
                     : r.marked
                       ? "marked"
-                      : r.option !== null
+                      : isAnswered
                         ? "answered"
                         : "empty"
                   : "empty";

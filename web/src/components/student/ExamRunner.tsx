@@ -60,7 +60,7 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const activeResponse = active ? responses[active.question_id] : undefined;
 
   const answeredCount = useMemo(
-    () => Object.values(responses).filter((r) => r.option !== null).length,
+    () => Object.values(responses).filter((r) => r.option !== null || (r.answer_text ?? "").trim().length > 0).length,
     [responses],
   );
 
@@ -607,7 +607,16 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
   const setAnswer = (questionId: number, option: number | null) => {
     setResponses((prev) => {
       const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
-      const next = { ...curr, option };
+      const next = { ...curr, option, answer_text: option === null ? curr.answer_text : "" };
+      pendingDeltaRef.current[questionId] = next;
+      return { ...prev, [questionId]: next };
+    });
+  };
+
+  const setAnswerText = (questionId: number, answerText: string) => {
+    setResponses((prev) => {
+      const curr = prev[questionId] ?? { question_id: questionId, option: null, marked: false };
+      const next = { ...curr, option: null, answer_text: answerText };
       pendingDeltaRef.current[questionId] = next;
       return { ...prev, [questionId]: next };
     });
@@ -812,13 +821,18 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
             <QuestionView
               question={active}
               selected={activeResponse?.option ?? null}
+              answerText={activeResponse?.answer_text ?? ""}
               onChoose={(idx) => setAnswer(active.question_id, idx)}
+              onAnswerText={(text) => setAnswerText(active.question_id, text)}
             />
 
             <div className="mt-6 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setAnswer(active.question_id, null)}
+                onClick={() => {
+                  setAnswer(active.question_id, null);
+                  setAnswerText(active.question_id, "");
+                }}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:border-zinc-500"
               >
                 <Eraser className="h-3.5 w-3.5" /> Clear

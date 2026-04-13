@@ -207,6 +207,10 @@ def compute_score(response: dict, answers: dict, questions_data: dict) -> int:
             q_map[str(q["question_id"])] = q
 
     total = 0
+
+    def _norm_text(v) -> str:
+        return " ".join(str(v or "").strip().lower().split())
+
     for r in response.get("responses", []):
         qid_raw = r.get("question_id")
         if not isinstance(qid_raw, int):
@@ -214,16 +218,29 @@ def compute_score(response: dict, answers: dict, questions_data: dict) -> int:
         if scope_ids is not None and qid_raw not in scope_ids:
             continue
         qid = str(qid_raw)
-        chosen = r.get("option")
-        if chosen is None or qid not in answers:
+        if qid not in q_map:
             continue
         correct = answers[str(qid)] if str(qid) in answers else answers.get(int(qid))
         q = q_map.get(qid, {})
+        q_type = str(q.get("question_type") or "MCQ").upper()
         marks = int(q.get("marks", 1) or 0)
         negative_marks = int(q.get("negative_marks", 0) or 0)
         if marks == 0 and negative_marks == 0:
             continue
-        if chosen == correct:
+        is_correct = False
+        if q_type == "FIB":
+            chosen_text = _norm_text(r.get("answer_text"))
+            correct_text = _norm_text(correct)
+            if not chosen_text:
+                continue
+            is_correct = chosen_text == correct_text
+        else:
+            chosen = r.get("option")
+            if chosen is None:
+                continue
+            is_correct = chosen == correct
+
+        if is_correct:
             total += marks
         else:
             total -= negative_marks
@@ -314,6 +331,25 @@ def _countable_total_marks(questions: dict) -> int:
                 continue
             total += marks
     return total
+
+
+def _sanitize_sections_for_student(sections: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for section in sections or []:
+        if not isinstance(section, dict):
+            continue
+        clean_questions: list[dict] = []
+        for q in section.get("questions", []) or []:
+            if not isinstance(q, dict):
+                continue
+            q_clean = dict(q)
+            q_clean.pop("correct_option", None)
+            q_clean.pop("fib_answer", None)
+            clean_questions.append(q_clean)
+        sec_clean = dict(section)
+        sec_clean["questions"] = clean_questions
+        out.append(sec_clean)
+    return out
 
 
 async def _get_release_state_by_exam_ids(exam_ids: list[int]) -> dict[int, dict]:
@@ -769,7 +805,7 @@ async def takeExam(exam_id: int, user=Depends(get_current_user)):
             "total_marks": exam["total_marks"],
             "max_warnings": exam.get("max_warnings") or 3,
         },
-        "sections": paper["questions"].get("sections", []),
+        "sections": _sanitize_sections_for_student(paper["questions"].get("sections", [])),
     }
 
 

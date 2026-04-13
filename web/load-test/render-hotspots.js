@@ -61,6 +61,36 @@ const READ_DURATION = envValue("READ_DURATION", "2m");
 const HEARTBEAT_VUS = Number(envValue("HEARTBEAT_VUS", "15"));
 const HEARTBEAT_DURATION = envValue("HEARTBEAT_DURATION", "2m");
 
+function parseStudentTokens() {
+  const fromCsv = envValue("STUDENT_TOKENS", "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const numbered = [];
+  for (let i = 1; i <= 10; i += 1) {
+    const key = `STUDENT_TOKEN_${i}`;
+    const value = envValue(key, "").trim();
+    if (value) numbered.push(value);
+  }
+
+  const merged = [...numbered, ...fromCsv];
+  if (merged.length > 0) {
+    return Array.from(new Set(merged));
+  }
+
+  return STUDENT_TOKEN ? [STUDENT_TOKEN] : [];
+}
+
+const STUDENT_TOKENS = parseStudentTokens();
+
+function pickStudentTokenByVu() {
+  if (STUDENT_TOKENS.length === 0) return "";
+  const vu = Number(__VU || 1);
+  const idx = (Math.max(1, vu) - 1) % STUDENT_TOKENS.length;
+  return STUDENT_TOKENS[idx];
+}
+
 const READ_ROUTE_ALLOWLIST = [
   "/user/session",
   "/exam/list",
@@ -110,8 +140,9 @@ function loadDiscoveredRoutes() {
 }
 
 function pickToken(route) {
+  const studentToken = pickStudentTokenByVu();
   if (route.includes("/hod") || route.includes("hod-dashboard")) {
-    return HOD_TOKEN || FACULTY_TOKEN || STUDENT_TOKEN;
+    return HOD_TOKEN || FACULTY_TOKEN || studentToken;
   }
   if (
     route.includes("/faculty") ||
@@ -123,7 +154,7 @@ function pickToken(route) {
     route.includes("/exam/:param/responses") ||
     route.includes("/exam/:param/snapshot")
   ) {
-    return FACULTY_TOKEN || HOD_TOKEN || STUDENT_TOKEN;
+    return FACULTY_TOKEN || HOD_TOKEN || studentToken;
   }
   if (
     route.includes("/response/my") ||
@@ -131,9 +162,9 @@ function pickToken(route) {
     route.includes("/exam/:param/take") ||
     route.includes("/response/heartbeat")
   ) {
-    return STUDENT_TOKEN || FACULTY_TOKEN || HOD_TOKEN;
+    return studentToken || FACULTY_TOKEN || HOD_TOKEN;
   }
-  return STUDENT_TOKEN || FACULTY_TOKEN || HOD_TOKEN;
+  return studentToken || FACULTY_TOKEN || HOD_TOKEN;
 }
 
 function inferMethod(route) {
@@ -228,7 +259,7 @@ const runnableRoutes = mergedRoutes
   .filter((x) => x !== null);
 
 const readCandidates = runnableRoutes.filter((r) => r.method === "GET" && !!r.token);
-const heartbeatEnabled = Boolean(EXAM_ID && STUDENT_TOKEN);
+const heartbeatEnabled = Boolean(EXAM_ID && STUDENT_TOKENS.length > 0);
 
 export const options = {
   scenarios: {
@@ -358,7 +389,7 @@ export function heartbeatStorm() {
     sleep(1);
     return;
   }
-  const token = STUDENT_TOKEN || FACULTY_TOKEN || HOD_TOKEN;
+  const token = pickStudentTokenByVu() || FACULTY_TOKEN || HOD_TOKEN;
   const body = makeHeartbeatBody();
 
   const res = http.post(`${BASE_URL}/response/heartbeat`, body, {
@@ -407,6 +438,7 @@ export function handleSummary(data) {
     `Base URL: ${BASE_URL}`,
     `Read candidates: ${readCandidates.length}`,
     `Heartbeat scenario: ${heartbeatEnabled ? "enabled" : "disabled"}`,
+    `Student tokens: ${STUDENT_TOKENS.length}`,
     "",
     metricLine(data, "http_reqs"),
     metricLine(data, "http_req_failed"),

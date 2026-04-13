@@ -14,14 +14,22 @@ function optImage(opt: string | OptionValue) {
 export default function QuestionView({
   question,
   selected,
+  answerText,
   onChoose,
+  onAnswerText,
   disabled = false,
 }: {
   question: ExamQuestion;
   selected: number | null;
+  answerText?: string;
   onChoose: (idx: number) => void;
+  onAnswerText?: (text: string) => void;
   disabled?: boolean;
 }) {
+  const qType = question.question_type || "MCQ";
+  const renderOptions = qType !== "FIB";
+  const visibleOptions = qType === "TOF" ? question.options.slice(0, 2) : question.options;
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
@@ -36,8 +44,23 @@ export default function QuestionView({
         )}
       </div>
 
-      <div className="space-y-2.5">
-        {question.options.map((opt, idx) => {
+      {qType === "FIB" ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+          <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-zinc-500">Your Answer</label>
+          <input
+            type="text"
+            value={answerText ?? ""}
+            disabled={disabled}
+            onChange={(e) => onAnswerText?.(e.target.value)}
+            placeholder="Type your answer"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-yellow-500 disabled:cursor-not-allowed disabled:opacity-60"
+          />
+        </div>
+      ) : null}
+
+      {renderOptions ? (
+        <div className="space-y-2.5">
+        {visibleOptions.map((opt, idx) => {
           const active = selected === idx;
           const image = optImage(opt);
           return (
@@ -68,6 +91,7 @@ export default function QuestionView({
           );
         })}
       </div>
+      ) : null}
     </div>
   );
 }

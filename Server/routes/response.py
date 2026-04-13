@@ -280,6 +280,10 @@ def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
             q_map[str(q["question_id"])] = q
 
     total = 0
+
+    def _norm_text(v) -> str:
+        return " ".join(str(v or "").strip().lower().split())
+
     for r in response.get("responses", []):
         qid_raw = r.get("question_id")
         if not isinstance(qid_raw, int):
@@ -287,16 +291,29 @@ def _compute_score(response: dict, answers: dict, questions_data: dict) -> int:
         if scope_ids is not None and qid_raw not in scope_ids:
             continue
         qid = str(qid_raw)
-        chosen = r.get("option")
-        if chosen is None or qid not in q_map:
+        if qid not in q_map:
             continue
         correct = answers.get(str(qid)) if str(qid) in answers else answers.get(int(qid))
         q = q_map.get(qid, {})
+        q_type = str(q.get("question_type") or "MCQ").upper()
         marks = int(q.get("marks", 1) or 0)
         negative_marks = int(q.get("negative_marks", 0) or 0)
         if marks == 0 and negative_marks == 0:
             continue
-        if chosen == correct:
+        is_correct = False
+        if q_type == "FIB":
+            chosen_text = _norm_text(r.get("answer_text"))
+            correct_text = _norm_text(correct)
+            if not chosen_text:
+                continue
+            is_correct = chosen_text == correct_text
+        else:
+            chosen = r.get("option")
+            if chosen is None:
+                continue
+            is_correct = chosen == correct
+
+        if is_correct:
             total += marks
         else:
             total -= negative_marks
@@ -707,6 +724,7 @@ async def getMyResponseDetail(response_id: int, user=Depends(get_current_user)):
                 submitted_map[qid] = {
                     "question_id": qid,
                     "option": item.get("option"),
+                    "answer_text": item.get("answer_text"),
                     "marked": bool(item.get("marked", False)),
                 }
 
@@ -719,12 +737,23 @@ async def getMyResponseDetail(response_id: int, user=Depends(get_current_user)):
                     continue
                 correct = answers.get(str(qid)) if str(qid) in answers else answers.get(qid)
                 chosen = submitted_map.get(qid, {}).get("option")
+                chosen_text = submitted_map.get(qid, {}).get("answer_text")
+                q_type = str(q.get("question_type") or "MCQ").upper()
+                is_correct = False
+                if q_type == "FIB":
+                    norm_chosen = " ".join(str(chosen_text or "").strip().lower().split())
+                    norm_correct = " ".join(str(correct or "").strip().lower().split())
+                    is_correct = bool(norm_chosen) and norm_chosen == norm_correct
+                else:
+                    is_correct = chosen is not None and correct is not None and chosen == correct
                 questions.append({
                     **q,
                     "correct_option": correct,
                     "chosen_option": chosen,
+                    "correct_answer_text": correct if q_type == "FIB" else None,
+                    "chosen_answer_text": chosen_text if q_type == "FIB" else None,
                     "marked": bool(submitted_map.get(qid, {}).get("marked", False)),
-                    "is_correct": chosen is not None and correct is not None and chosen == correct,
+                    "is_correct": is_correct,
                 })
 
             review_sections.append({
@@ -804,6 +833,7 @@ async def getMyResponseDetail(response_id: int, user=Depends(get_current_user)):
             submitted_map[qid] = {
                 "question_id": qid,
                 "option": item.get("option"),
+                "answer_text": item.get("answer_text"),
                 "marked": bool(item.get("marked", False)),
             }
 
@@ -816,12 +846,23 @@ async def getMyResponseDetail(response_id: int, user=Depends(get_current_user)):
                 continue
             correct = answers.get(str(qid)) if str(qid) in answers else answers.get(qid)
             chosen = submitted_map.get(qid, {}).get("option")
+            chosen_text = submitted_map.get(qid, {}).get("answer_text")
+            q_type = str(q.get("question_type") or "MCQ").upper()
+            is_correct = False
+            if q_type == "FIB":
+                norm_chosen = " ".join(str(chosen_text or "").strip().lower().split())
+                norm_correct = " ".join(str(correct or "").strip().lower().split())
+                is_correct = bool(norm_chosen) and norm_chosen == norm_correct
+            else:
+                is_correct = chosen is not None and correct is not None and chosen == correct
             questions.append({
                 **q,
                 "correct_option": correct,
                 "chosen_option": chosen,
+                "correct_answer_text": correct if q_type == "FIB" else None,
+                "chosen_answer_text": chosen_text if q_type == "FIB" else None,
                 "marked": bool(submitted_map.get(qid, {}).get("marked", False)),
-                "is_correct": chosen is not None and correct is not None and chosen == correct,
+                "is_correct": is_correct,
             })
 
         review_sections.append({

@@ -17,10 +17,14 @@ interface OptionValue {
   image_url?: string;
 }
 
+type QuestionType = "MCQ" | "FIB" | "TOF";
+
 interface BuilderQuestion {
   question_id: number;
   text: string;
   image_url?: string;
+  question_type: QuestionType;
+  fib_answer: string;
   options: [OptionValue, OptionValue, OptionValue, OptionValue];
   correct_option: number | null;
   marks: number;
@@ -83,6 +87,8 @@ type Action =
   | { type: "ADD_QUESTION"; sectionId: number }
   | { type: "REMOVE_QUESTION" }
   | { type: "UPDATE_Q_TEXT"; text: string }
+  | { type: "SET_QUESTION_TYPE"; questionType: QuestionType }
+  | { type: "UPDATE_FIB_ANSWER"; answer: string }
   | { type: "UPDATE_OPTION"; idx: number; text: string }
   | { type: "SET_CORRECT"; idx: number }
   | { type: "UPDATE_MARKS"; marks: number }
@@ -121,15 +127,32 @@ function getDisplayIndex(sections: BuilderSection[], qId: number): number {
 
 function questionStatus(q: BuilderQuestion): "complete" | "partial" | "empty" {
   const hasText = q.text.trim().length > 0 || !!q.image_url;
-  const allOpts = q.options.every(o => o.text.trim().length > 0 || !!o.image_url);
-  const hasCorrect = q.correct_option !== null;
+  if (q.question_type === "FIB") {
+    const hasFib = q.fib_answer.trim().length > 0;
+    if (hasText && hasFib) return "complete";
+    if (hasText || hasFib) return "partial";
+    return "empty";
+  }
+  const optionCount = q.question_type === "TOF" ? 2 : 4;
+  const visibleOptions = q.options.slice(0, optionCount);
+  const allOpts = visibleOptions.every(o => o.text.trim().length > 0 || !!o.image_url);
+  const hasCorrect = q.correct_option !== null && q.correct_option >= 0 && q.correct_option < optionCount;
   if (hasText && allOpts && hasCorrect) return "complete";
-  if (hasText || q.options.some(o => o.text.trim().length > 0 || !!o.image_url)) return "partial";
+  if (hasText || visibleOptions.some(o => o.text.trim().length > 0 || !!o.image_url)) return "partial";
   return "empty";
 }
 
 function makeQ(id: number): BuilderQuestion {
-  return { question_id: id, text: "", options: [{ text: "" }, { text: "" }, { text: "" }, { text: "" }], correct_option: null, marks: 1, negative_marks: 0 };
+  return {
+    question_id: id,
+    text: "",
+    question_type: "MCQ",
+    fib_answer: "",
+    options: [{ text: "" }, { text: "" }, { text: "" }, { text: "" }],
+    correct_option: null,
+    marks: 1,
+    negative_marks: 0,
+  };
 }
 
 function getClipboardImageFile(event: React.ClipboardEvent<HTMLTextAreaElement>): File | null {
@@ -247,6 +270,38 @@ function reducer(state: BuilderState, action: Action): BuilderState {
     case "UPDATE_Q_TEXT":
       return updateQ(state, q => ({ ...q, text: action.text }));
 
+    case "SET_QUESTION_TYPE":
+      return updateQ(state, q => {
+        if (action.questionType === "FIB") {
+          return {
+            ...q,
+            question_type: "FIB",
+            correct_option: null,
+            fib_answer: q.fib_answer || "",
+          };
+        }
+        if (action.questionType === "TOF") {
+          const opts = [...q.options] as [OptionValue, OptionValue, OptionValue, OptionValue];
+          opts[0] = { ...opts[0], text: opts[0].text || "True" };
+          opts[1] = { ...opts[1], text: opts[1].text || "False" };
+          return {
+            ...q,
+            question_type: "TOF",
+            fib_answer: "",
+            options: opts,
+            correct_option: q.correct_option !== null && q.correct_option < 2 ? q.correct_option : null,
+          };
+        }
+        return {
+          ...q,
+          question_type: "MCQ",
+          fib_answer: "",
+        };
+      });
+
+    case "UPDATE_FIB_ANSWER":
+      return updateQ(state, q => ({ ...q, fib_answer: action.answer }));
+
     case "UPDATE_OPTION":
       return updateQ(state, q => {
         const opts = [...q.options] as [OptionValue, OptionValue, OptionValue, OptionValue];
@@ -304,7 +359,7 @@ const INIT: BuilderState = {
 interface InitialPaperData {
   examName: string;
   sections: BuilderSection[];
-  answers: Record<string, number>;
+  answers: Record<string, number | string>;
 }
 
 interface PaperBuilderProps {
@@ -318,14 +373,23 @@ interface PaperBuilderProps {
 
 function buildInitialState(initialData?: InitialPaperData): BuilderState {
   if (!initialData) return INIT;
+  const baseOptions = [{ text: "" }, { text: "" }, { text: "" }, { text: "" }] as [OptionValue, OptionValue, OptionValue, OptionValue];
   const sections: BuilderSection[] = initialData.sections.map(s => ({
     ...s,
     questions: s.questions.map(q => ({
         ...q,
-        options: (q.options as Array<string | OptionValue>).map(o =>
-          typeof o === "string" ? { text: o } : o
-        ) as [OptionValue, OptionValue, OptionValue, OptionValue],
-        correct_option: initialData.answers[String(q.question_id)] ?? null,
+        question_type: (q.question_type || "MCQ") as QuestionType,
+        fib_answer: typeof initialData.answers[String(q.question_id)] === "string"
+          ? String(initialData.answers[String(q.question_id)])
+          : String((q as BuilderQuestion).fib_answer || ""),
+        options: [0, 1, 2, 3].map((idx) => {
+          const rawOpt = (q.options as Array<string | OptionValue> | undefined)?.[idx];
+          if (!rawOpt) return baseOptions[idx];
+          return typeof rawOpt === "string" ? { text: rawOpt } : rawOpt;
+        }) as [OptionValue, OptionValue, OptionValue, OptionValue],
+        correct_option: typeof initialData.answers[String(q.question_id)] === "number"
+          ? Number(initialData.answers[String(q.question_id)])
+          : null,
       })),
   }));
   const allQIds = sections.flatMap(s => s.questions.map(q => q.question_id));
@@ -517,6 +581,20 @@ function QuestionEditor({
           }}
         />
 
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium uppercase tracking-widest text-zinc-600">Question Type</label>
+          <select
+            value={q.question_type}
+            disabled={contentReadonly}
+            onChange={(e) => dispatch({ type: "SET_QUESTION_TYPE", questionType: e.target.value as QuestionType })}
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-zinc-700 disabled:cursor-default disabled:opacity-60"
+          >
+            <option value="MCQ">MCQ (A, B, C, D)</option>
+            <option value="FIB">Fill in the blanks</option>
+            <option value="TOF">True or False</option>
+          </select>
+        </div>
+
         {/* Question image */}
         {q.image_url ? (
           <div className="relative inline-block">
@@ -557,7 +635,45 @@ function QuestionEditor({
         )}
       </div>
 
-      {/* Options */}
+      {/* Answers */}
+      {q.question_type === "FIB" ? (
+        <div className="space-y-2.5">
+          <p className="text-xs font-medium text-zinc-600 uppercase tracking-widest">Correct Answer</p>
+          <input
+            value={q.fib_answer}
+            onChange={(e) => dispatch({ type: "UPDATE_FIB_ANSWER", answer: e.target.value })}
+            placeholder="Type expected answer"
+            readOnly={contentReadonly}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-zinc-700 focus:ring-1 focus:ring-zinc-700 read-only:cursor-default read-only:focus:border-zinc-800 read-only:focus:ring-0"
+          />
+        </div>
+      ) : q.question_type === "TOF" ? (
+        <div className="space-y-2.5">
+          <p className="text-xs font-medium text-zinc-600 uppercase tracking-widest">
+            {readonly ? "Options" : "True / False — click circle to mark correct"}
+          </p>
+          {(["True", "False"] as const).map((label, idx) => (
+            <div
+              key={label}
+              className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition-all ${q.correct_option === idx ? "border-emerald-700/70 bg-emerald-950/25" : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700/80"}`}
+            >
+              <span className={`shrink-0 w-7 h-7 mt-0.5 rounded-md flex items-center justify-center text-xs font-bold transition-colors ${q.correct_option === idx ? "bg-emerald-700/40 text-emerald-300" : "bg-zinc-800 text-zinc-400"}`}>
+                {idx === 0 ? "T" : "F"}
+              </span>
+              <p className="flex-1 text-sm text-zinc-200 leading-relaxed">{label}</p>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "SET_CORRECT", idx })}
+                disabled={!!readonly}
+                title={q.correct_option === idx ? "Correct answer" : "Mark as correct"}
+                className={`shrink-0 w-5 h-5 mt-0.5 rounded-full border-2 flex items-center justify-center transition-all ${q.correct_option === idx ? "border-emerald-500 bg-emerald-500" : "border-zinc-600 hover:border-zinc-400"} disabled:cursor-default`}
+              >
+                {q.correct_option === idx && <span className="w-2 h-2 rounded-full bg-white block" />}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="space-y-2.5">
         <p className="text-xs font-medium text-zinc-600 uppercase tracking-widest">
           {readonly ? "Options" : "Options — click circle to mark correct"}
@@ -580,6 +696,7 @@ function QuestionEditor({
           />
         ))}
       </div>
+      )}
 
       {/* Marks */}
       <div className="flex items-center gap-6">
@@ -923,15 +1040,20 @@ export default function PaperBuilder({ paperId, initialData, inUse = false, used
           question_id: q.question_id,
           text: q.text,
           image_url: q.image_url,
+          question_type: q.question_type,
           options: q.options,
           marks: q.marks,
           negative_marks: q.negative_marks,
         })),
       })),
     };
-    const answers: Record<number, number> = {};
+    const answers: Record<number, number | string> = {};
     for (const q of flat) {
-      if (q.correct_option !== null) answers[q.question_id] = q.correct_option;
+      if (q.question_type === "FIB") {
+        if (q.fib_answer.trim()) answers[q.question_id] = q.fib_answer.trim();
+      } else if (q.correct_option !== null) {
+        answers[q.question_id] = q.correct_option;
+      }
     }
     return { questions, answers };
   };

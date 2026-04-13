@@ -7,6 +7,8 @@ export interface ExamQuestion {
   question_id: number;
   text: string;
   image_url?: string;
+  question_type?: "MCQ" | "FIB" | "TOF";
+  fib_answer?: string;
   options: Array<string | OptionValue>;
   marks: number;
   negative_marks: number;
@@ -34,5 +36,6 @@ export interface ExamStructure {
 export interface QuestionResponse {
   question_id: number;
   option: number | null;
+  answer_text?: string;
   marked: boolean;
 }
