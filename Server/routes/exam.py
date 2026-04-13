@@ -19,6 +19,7 @@ from utils import serializer, createSessionToken
 from temp_invite_cache import (
     INVITE_GRACE_SECONDS,
     expiry_for_exam,
+    finalize_invite_records_after_end,
     get_invite_record,
     list_invite_records,
     set_invite_session,
@@ -440,6 +441,32 @@ async def _invalidate_exam_cache(exam_id: int) -> None:
     global _exam_available_cache_version
     await delete_cache(f"exam:core:{exam_id}")
     _exam_available_cache_version += 1
+
+
+async def _auto_submit_expired_exam_responses(exam: dict) -> None:
+    exam_id = exam.get("id")
+    if not isinstance(exam_id, int):
+        return
+
+    end_raw = exam.get("end")
+    if not isinstance(end_raw, str):
+        return
+    try:
+        end_dt = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+    except Exception:
+        return
+
+    if datetime.now(timezone.utc) < end_dt:
+        return
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.client.table("Responses") \
+        .update({"status": "submitted", "submitted_at": now_iso}) \
+        .eq("exam_id", exam_id) \
+        .eq("status", "in_progress") \
+        .execute()
+
+    await finalize_invite_records_after_end(exam_id, fallback_ttl_seconds=INVITE_POST_EXAM_GRACE_SECONDS)
 
 
 @router.post("/exam/{exam_id}/invite-link")
@@ -1046,6 +1073,8 @@ async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
     if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
+    await _auto_submit_expired_exam_responses(exam)
+
     # 2. Fetch question paper for scoring
     paper = await _get_paper_full(exam["questionpaper_id"])
     if not paper:
@@ -1117,6 +1146,8 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
     if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
+    await _auto_submit_expired_exam_responses(exam)
+
     paper = await _get_paper_questions(exam["questionpaper_id"])
     countable_qids = _countable_question_ids(paper["questions"]) if paper else set()
     total_questions = len(countable_qids)
@@ -1171,6 +1202,8 @@ async def getExamLogs(
     if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
 
+    await _auto_submit_expired_exam_responses(exam)
+
     query = db.client.table("ExamLogs") \
         .select("event,created_at,Users(name,roll)") \
         .eq("exam_id", exam_id)
@@ -1222,6 +1255,8 @@ async def getExamSnapshot(
     exam = await _get_exam_core(exam_id)
     if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    await _auto_submit_expired_exam_responses(exam)
 
     paper = await _get_paper_questions(exam["questionpaper_id"])
     countable_qids = _countable_question_ids(paper["questions"]) if paper else set()

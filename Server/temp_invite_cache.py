@@ -96,6 +96,7 @@ async def upsert_invite_record(
         "student_branch": student_branch,
         "student_roll": normalized_roll,
         "status": status,
+        "expiry_iso": expiry_iso,
         "response": response,
         "submitted_at": submitted_at,
         "last_seen_at": last_seen_at,
@@ -110,3 +111,32 @@ async def upsert_invite_record(
     await set_cache(idx_key, rolls, ttl)
 
     return record
+
+
+async def finalize_invite_records_after_end(exam_id: int, fallback_ttl_seconds: int = INVITE_GRACE_SECONDS) -> int:
+    records = await list_invite_records(exam_id)
+    changed = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for rec in records:
+        if rec.get("status") != "in_progress":
+            continue
+        roll = str(rec.get("student_roll") or "").strip().upper()
+        if not roll:
+            continue
+
+        updated = {
+            **rec,
+            "status": "submitted",
+            "submitted_at": rec.get("submitted_at") or now_iso,
+            "last_seen_at": rec.get("last_seen_at") or now_iso,
+        }
+        expiry_iso = str(updated.get("expiry_iso") or "").strip()
+        if expiry_iso:
+            ttl = ttl_from_expiry_iso(expiry_iso)
+        else:
+            ttl = max(1, int(fallback_ttl_seconds))
+        await set_cache(_record_key(exam_id, roll), updated, ttl)
+        changed += 1
+
+    return changed
