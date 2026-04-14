@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 
 from memory_cache import get_cache, set_cache
+from supa import db
 
 INVITE_SESSION_PREFIX = "invite:session"
 INVITE_INDEX_PREFIX = "invite:index"
@@ -18,6 +19,81 @@ def _index_key(exam_id: int) -> str:
 
 def _record_key(exam_id: int, roll: str) -> str:
     return f"{INVITE_RECORD_PREFIX}:{exam_id}:{(roll or '').strip().upper()}"
+
+
+def _normalize_roll(roll: str) -> str:
+    return (roll or "").strip().upper()
+
+
+def _db_row_to_record(row: dict) -> dict:
+    return {
+        "exam_id": row.get("exam_id"),
+        "student_roll": _normalize_roll(str(row.get("roll") or "")),
+        "status": row.get("status") or "in_progress",
+        "expiry_iso": row.get("expiry_iso") or "",
+        "response": row.get("response") or {},
+        "submitted_at": row.get("submitted_at"),
+        "last_seen_at": row.get("last_seen_at"),
+        "events": row.get("events") or [],
+    }
+
+
+async def _db_get_record(exam_id: int, roll: str) -> dict | None:
+    try:
+        res = await db.client.table("ResponseCache") \
+            .select("exam_id,roll,status,expiry_iso,response,submitted_at,last_seen_at,events") \
+            .eq("exam_id", exam_id) \
+            .eq("roll", _normalize_roll(roll)) \
+            .limit(1) \
+            .execute()
+    except Exception:
+        return None
+
+    if not res.data:
+        return None
+    return _db_row_to_record(res.data[0])
+
+
+async def _db_list_records(exam_id: int) -> list[dict] | None:
+    try:
+        res = await db.client.table("ResponseCache") \
+            .select("exam_id,roll,status,expiry_iso,response,submitted_at,last_seen_at,events") \
+            .eq("exam_id", exam_id) \
+            .execute()
+    except Exception:
+        return None
+
+    return [_db_row_to_record(row) for row in (res.data or [])]
+
+
+async def _db_upsert_record(record: dict) -> bool:
+    try:
+        payload = {
+            "exam_id": int(record.get("exam_id") or 0),
+            "roll": _normalize_roll(str(record.get("student_roll") or "")),
+            "status": str(record.get("status") or "in_progress"),
+            "expiry_iso": str(record.get("expiry_iso") or ""),
+            "response": record.get("response") or {},
+            "submitted_at": record.get("submitted_at"),
+            "last_seen_at": record.get("last_seen_at"),
+            "events": record.get("events") or [],
+        }
+        await db.client.table("ResponseCache").upsert(payload, on_conflict="exam_id,roll").execute()
+        return True
+    except Exception:
+        return False
+
+
+async def _db_finalize_records_after_end(exam_id: int, now_iso: str) -> bool:
+    try:
+        await db.client.table("ResponseCache") \
+            .update({"status": "submitted", "submitted_at": now_iso}) \
+            .eq("exam_id", exam_id) \
+            .eq("status", "in_progress") \
+            .execute()
+        return True
+    except Exception:
+        return False
 
 
 def expiry_for_exam(end_iso: str, grace_seconds: int = INVITE_GRACE_SECONDS) -> datetime:
@@ -45,10 +121,17 @@ async def get_invite_session(token: str) -> dict | None:
 
 
 async def get_invite_record(exam_id: int, roll: str) -> dict | None:
+    db_record = await _db_get_record(exam_id, roll)
+    if db_record is not None:
+        return db_record
     return await get_cache(_record_key(exam_id, roll))
 
 
 async def list_invite_records(exam_id: int) -> list[dict]:
+    db_rows = await _db_list_records(exam_id)
+    if db_rows is not None:
+        return db_rows
+
     rolls = await get_cache(_index_key(exam_id)) or []
     out: list[dict] = []
     live_rolls: list[str] = []
@@ -69,9 +152,6 @@ async def list_invite_records(exam_id: int) -> list[dict]:
 async def upsert_invite_record(
     exam_id: int,
     roll: str,
-    student_name: str,
-    student_pic: str,
-    student_branch: str,
     response: dict,
     status: str,
     expiry_iso: str,
@@ -79,7 +159,7 @@ async def upsert_invite_record(
     last_seen_at: str | None = None,
     append_events: list[dict] | None = None,
 ) -> dict:
-    normalized_roll = (roll or "").strip().upper()
+    normalized_roll = _normalize_roll(roll)
     ttl = ttl_from_expiry_iso(expiry_iso)
 
     key = _record_key(exam_id, normalized_roll)
@@ -91,9 +171,6 @@ async def upsert_invite_record(
 
     record = {
         "exam_id": exam_id,
-        "student_name": student_name,
-        "student_pic": student_pic,
-        "student_branch": student_branch,
         "student_roll": normalized_roll,
         "status": status,
         "expiry_iso": expiry_iso,
@@ -102,6 +179,8 @@ async def upsert_invite_record(
         "last_seen_at": last_seen_at,
         "events": events,
     }
+
+    await _db_upsert_record(record)
     await set_cache(key, record, ttl)
 
     idx_key = _index_key(exam_id)
@@ -114,9 +193,11 @@ async def upsert_invite_record(
 
 
 async def finalize_invite_records_after_end(exam_id: int, fallback_ttl_seconds: int = INVITE_GRACE_SECONDS) -> int:
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await _db_finalize_records_after_end(exam_id, now_iso)
+
     records = await list_invite_records(exam_id)
     changed = 0
-    now_iso = datetime.now(timezone.utc).isoformat()
 
     for rec in records:
         if rec.get("status") != "in_progress":
@@ -136,6 +217,8 @@ async def finalize_invite_records_after_end(exam_id: int, fallback_ttl_seconds: 
             ttl = ttl_from_expiry_iso(expiry_iso)
         else:
             ttl = max(1, int(fallback_ttl_seconds))
+
+        await _db_upsert_record(updated)
         await set_cache(_record_key(exam_id, roll), updated, ttl)
         changed += 1
 

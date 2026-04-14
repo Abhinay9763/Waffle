@@ -451,9 +451,6 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
             raise HTTPException(status_code=401, detail="Invite session expired.")
 
         roll = str(user.get("roll", ""))
-        name = str(user.get("name") or f"Student {roll}")
-        pic = str(user.get("pic") or "")
-        branch = str(user.get("branch") or "")
         existing = await get_invite_record(hb.exam_id, roll)
         base_response = (existing or {}).get("response") or {"student_roll": roll, "responses": []}
 
@@ -472,9 +469,6 @@ async def heartbeat(hb: Heartbeat, user=Depends(get_current_user)):
         await upsert_invite_record(
             exam_id=hb.exam_id,
             roll=roll,
-            student_name=name,
-            student_pic=pic,
-            student_branch=branch,
             response=next_response,
             status="submitted" if (existing or {}).get("status") == "submitted" else "in_progress",
             expiry_iso=invite_expiry,
@@ -503,9 +497,6 @@ async def submitResponse(sub: Submit, user=Depends(get_current_user)):
             raise HTTPException(status_code=401, detail="Invite session expired.")
 
         roll = str(user.get("roll", ""))
-        name = str(user.get("name") or f"Student {roll}")
-        pic = str(user.get("pic") or "")
-        branch = str(user.get("branch") or "")
         existing = await get_invite_record(sub.exam_id, roll)
         if existing and existing.get("status") == "submitted":
             return {"msg": "Response already submitted."}
@@ -514,9 +505,6 @@ async def submitResponse(sub: Submit, user=Depends(get_current_user)):
         await upsert_invite_record(
             exam_id=sub.exam_id,
             roll=roll,
-            student_name=name,
-            student_pic=pic,
-            student_branch=branch,
             response=sub.response,
             status="submitted",
             expiry_iso=invite_expiry,

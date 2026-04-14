@@ -333,6 +333,14 @@ def _countable_total_marks(questions: dict) -> int:
     return total
 
 
+def _row_roll(row: dict) -> str:
+    return _normalize_roll(str((row.get("Users") or {}).get("roll") or ""))
+
+
+def _record_roll(record: dict) -> str:
+    return _normalize_roll(str(record.get("student_roll") or ""))
+
+
 def _sanitize_sections_for_student(sections: list[dict]) -> list[dict]:
     out: list[dict] = []
     for section in sections or []:
@@ -1125,6 +1133,7 @@ async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
         .execute()
 
     temp_records = await list_invite_records(exam_id)
+    db_rolls = {_row_roll(r) for r in (resp_res.data or []) if _row_roll(r)}
 
     # 4. Compute score per response
     scored = []
@@ -1147,15 +1156,19 @@ async def getExamResponses(exam_id: int, user=Depends(get_current_user)):
     for r in temp_records:
         if r.get("status") != "submitted":
             continue
+        if _record_roll(r) in db_rolls:
+            continue
+        roll = str(r.get("student_roll") or "")
+        profile = student_public_profile(roll)
         response_payload = r.get("response") or {"responses": []}
         score = compute_score(response_payload, paper["answers"], paper["questions"])
         scored.append({
             "id": temp_id,
             "submitted_at": r.get("submitted_at"),
-            "student_name": r.get("student_name") or f"Student {r.get('student_roll', '')}",
-            "student_roll": r.get("student_roll") or "",
-            "student_pic": r.get("student_pic") or "",
-            "student_branch": r.get("student_branch") or "",
+            "student_name": str((profile or {}).get("Name") or f"Student {roll}"),
+            "student_roll": str((profile or {}).get("Roll") or roll),
+            "student_pic": str((profile or {}).get("Pic") or ""),
+            "student_branch": str((profile or {}).get("Branch") or ""),
             "score": score,
         })
         temp_id -= 1
@@ -1195,22 +1208,27 @@ async def getExamLive(exam_id: int, user=Depends(get_current_user)):
         .execute()
 
     temp_records = await list_invite_records(exam_id)
+    db_rolls = {_row_roll(r) for r in (resp_res.data or []) if _row_roll(r)}
     temp_rows = []
     for r in temp_records:
         status = r.get("status")
         if status not in {"in_progress", "submitted"}:
             continue
+        if _record_roll(r) in db_rolls:
+            continue
+        roll = str(r.get("student_roll") or "")
+        profile = student_public_profile(roll)
         temp_rows.append({
             "status": status,
             "last_seen_at": r.get("last_seen_at"),
             "submitted_at": r.get("submitted_at"),
-            "user_id": f"invite:{r.get('student_roll', '')}",
+            "user_id": f"invite:{roll}",
             "response": r.get("response") or {"responses": []},
             "Users": {
-                "name": r.get("student_name") or f"Student {r.get('student_roll', '')}",
-                "roll": r.get("student_roll") or "",
-                "pic": r.get("student_pic") or "",
-                "branch": r.get("student_branch") or "",
+                "name": str((profile or {}).get("Name") or f"Student {roll}"),
+                "roll": str((profile or {}).get("Roll") or roll),
+                "pic": str((profile or {}).get("Pic") or ""),
+                "branch": str((profile or {}).get("Branch") or ""),
             },
         })
 
@@ -1253,6 +1271,8 @@ async def getExamLogs(
     temp_records = await list_invite_records(exam_id)
     temp_logs = []
     for rec in temp_records:
+        roll = str(rec.get("student_roll") or "")
+        profile = student_public_profile(roll)
         for ev in (rec.get("events") or []):
             created_at = str(ev.get("created_at") or "")
             if since and created_at <= since:
@@ -1261,10 +1281,10 @@ async def getExamLogs(
                 "event": ev.get("event"),
                 "created_at": created_at,
                 "Users": {
-                    "name": rec.get("student_name") or f"Student {rec.get('student_roll', '')}",
-                    "roll": rec.get("student_roll") or "",
-                    "pic": rec.get("student_pic") or "",
-                    "branch": rec.get("student_branch") or "",
+                    "name": str((profile or {}).get("Name") or f"Student {roll}"),
+                    "roll": str((profile or {}).get("Roll") or roll),
+                    "pic": str((profile or {}).get("Pic") or ""),
+                    "branch": str((profile or {}).get("Branch") or ""),
                 },
             })
 
@@ -1305,22 +1325,27 @@ async def getExamSnapshot(
         .execute()
 
     temp_records = await list_invite_records(exam_id)
+    db_rolls = {_row_roll(r) for r in (resp_res.data or []) if _row_roll(r)}
     temp_rows = []
     for r in temp_records:
         status = r.get("status")
         if status not in {"in_progress", "submitted"}:
             continue
+        if _record_roll(r) in db_rolls:
+            continue
+        roll = str(r.get("student_roll") or "")
+        profile = student_public_profile(roll)
         temp_rows.append({
             "status": status,
             "last_seen_at": r.get("last_seen_at"),
             "submitted_at": r.get("submitted_at"),
-            "user_id": f"invite:{r.get('student_roll', '')}",
+            "user_id": f"invite:{roll}",
             "response": r.get("response") or {"responses": []},
             "Users": {
-                "name": r.get("student_name") or f"Student {r.get('student_roll', '')}",
-                "roll": r.get("student_roll") or "",
-                "pic": r.get("student_pic") or "",
-                "branch": r.get("student_branch") or "",
+                "name": str((profile or {}).get("Name") or f"Student {roll}"),
+                "roll": str((profile or {}).get("Roll") or roll),
+                "pic": str((profile or {}).get("Pic") or ""),
+                "branch": str((profile or {}).get("Branch") or ""),
             },
         })
 
@@ -1338,6 +1363,8 @@ async def getExamSnapshot(
     logs = logs_res.data or []
     temp_logs = []
     for rec in temp_records:
+        roll = str(rec.get("student_roll") or "")
+        profile = student_public_profile(roll)
         for ev in (rec.get("events") or []):
             created_at = str(ev.get("created_at") or "")
             if since and created_at <= since:
@@ -1346,10 +1373,10 @@ async def getExamSnapshot(
                 "event": ev.get("event"),
                 "created_at": created_at,
                 "Users": {
-                    "name": rec.get("student_name") or f"Student {rec.get('student_roll', '')}",
-                    "roll": rec.get("student_roll") or "",
-                    "pic": rec.get("student_pic") or "",
-                    "branch": rec.get("student_branch") or "",
+                    "name": str((profile or {}).get("Name") or f"Student {roll}"),
+                    "roll": str((profile or {}).get("Roll") or roll),
+                    "pic": str((profile or {}).get("Pic") or ""),
+                    "branch": str((profile or {}).get("Branch") or ""),
                 },
             })
 
