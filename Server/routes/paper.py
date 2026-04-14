@@ -887,6 +887,29 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
                             except Exception:
                                 pass  # Skip images that fail to download
 
+                    # Answer line for MCQ/TOF
+                    answer_text = ""
+                    try:
+                        answer_idx = int(answer_value)
+                    except Exception:
+                        answer_idx = None
+
+                    if answer_idx is not None:
+                        if q_type == "TOF":
+                            if answer_idx == 0:
+                                answer_text = "True"
+                            elif answer_idx == 1:
+                                answer_text = "False"
+                            else:
+                                answer_text = ""
+                        else:
+                            letters = ["A", "B", "C", "D"]
+                            if 0 <= answer_idx < len(letters):
+                                answer_text = letters[answer_idx]
+
+                    ans_para = add_doc_paragraph(f"Answer : {answer_text}")
+                    ans_para.paragraph_format.left_indent = Inches(0.3)
+
     # Write to BytesIO
     output = BytesIO()
     doc.save(output)
