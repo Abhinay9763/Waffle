@@ -746,6 +746,7 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
 
     paper_data = paper_res.data[0]
     questions_data = paper_data.get("questions") or {}
+    answers_data = paper_data.get("answers") or {}
     sections = questions_data.get("sections", [])
     meta = questions_data.get("meta", {})
     paper_name = meta.get("exam_name") or f"Paper #{paper_id}"
@@ -805,6 +806,13 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
 
             for q in section.get("questions", []):
                 qnum += 1
+                qid = q.get("question_id")
+                q_type = _normalize_question_type(q.get("question_type"))
+                answer_value = None
+                if qid is not None:
+                    answer_value = answers_data.get(str(qid))
+                    if answer_value is None:
+                        answer_value = answers_data.get(qid)
 
                 # Question text
                 q_para = add_doc_paragraph(style=question_style)
@@ -830,35 +838,43 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
                     except Exception:
                         pass  # Skip images that fail to download
 
-                # Options
-                letters = ["A", "B", "C", "D"]
-                for i, opt in enumerate(q.get("options", [])):
-                    # Handle both string and OptionValue formats
-                    opt_text = opt if isinstance(opt, str) else opt.get("text", "")
-                    opt_image_url = None if isinstance(opt, str) else opt.get("image_url")
+                if q_type == "FIB":
+                    fib_answer = _normalize_fib_answer(answer_value)
+                    ans_para = add_doc_paragraph(f"Answer : {fib_answer}")
+                    ans_para.paragraph_format.left_indent = Inches(0.3)
+                else:
+                    # Options (MCQ/TOF)
+                    letters = ["A", "B", "C", "D"]
+                    opts = q.get("options", []) or []
+                    option_limit = 2 if q_type == "TOF" else 4
+                    for i, opt in enumerate(opts[:option_limit]):
+                        # Handle both string and OptionValue formats
+                        opt_text = opt if isinstance(opt, str) else opt.get("text", "")
+                        opt_image_url = None if isinstance(opt, str) else opt.get("image_url")
 
-                    # Option text
-                    opt_para = add_doc_paragraph(f"{letters[i]})  {opt_text}")
-                    opt_para.paragraph_format.left_indent = Inches(0.3)
+                        label = letters[i] if i < len(letters) else str(i + 1)
+                        # Option text
+                        opt_para = add_doc_paragraph(f"{label})  {opt_text}")
+                        opt_para.paragraph_format.left_indent = Inches(0.3)
 
-                    # Option image
-                    if opt_image_url:
-                        try:
-                            if opt_image_url not in image_cache:
-                                resp = await client.get(opt_image_url)
-                                if resp.status_code == 200:
-                                    image_cache[opt_image_url] = resp.content
+                        # Option image
+                        if opt_image_url:
+                            try:
+                                if opt_image_url not in image_cache:
+                                    resp = await client.get(opt_image_url)
+                                    if resp.status_code == 200:
+                                        image_cache[opt_image_url] = resp.content
 
-                            if opt_image_url in image_cache:
-                                img_bytes = BytesIO(image_cache[opt_image_url])
-                                if insert_anchor is not None:
-                                    opt_img_para = add_doc_paragraph()
-                                    opt_img_para.paragraph_format.left_indent = Inches(0.3)
-                                    opt_img_para.add_run().add_picture(img_bytes, width=Inches(OPTION_IMAGE_WIDTH))
-                                else:
-                                    doc.add_picture(img_bytes, width=Inches(OPTION_IMAGE_WIDTH))
-                        except Exception:
-                            pass  # Skip images that fail to download
+                                if opt_image_url in image_cache:
+                                    img_bytes = BytesIO(image_cache[opt_image_url])
+                                    if insert_anchor is not None:
+                                        opt_img_para = add_doc_paragraph()
+                                        opt_img_para.paragraph_format.left_indent = Inches(0.3)
+                                        opt_img_para.add_run().add_picture(img_bytes, width=Inches(OPTION_IMAGE_WIDTH))
+                                    else:
+                                        doc.add_picture(img_bytes, width=Inches(OPTION_IMAGE_WIDTH))
+                            except Exception:
+                                pass  # Skip images that fail to download
 
     # Write to BytesIO
     output = BytesIO()
