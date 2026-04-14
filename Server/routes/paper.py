@@ -73,6 +73,19 @@ def _normalize_option(value) -> int | None:
     return None
 
 
+def _normalize_question_type(value) -> str:
+    raw = str(value or "").strip().upper()
+    if raw in {"FIB", "FILL", "FILL_IN_THE_BLANK", "FILL_IN_THE_BLANKS"}:
+        return "FIB"
+    if raw in {"TOF", "TRUE_FALSE", "TRUE OR FALSE", "TRUE_OR_FALSE", "TF"}:
+        return "TOF"
+    return "MCQ"
+
+
+def _normalize_fib_answer(value) -> str:
+    return str(value or "").strip()
+
+
 def _parse_import_workbook(raw: bytes):
     try:
         wb = load_workbook(filename=BytesIO(raw), data_only=True)
@@ -94,8 +107,7 @@ def _parse_import_workbook(raw: bytes):
     header_map = {h: i for i, h in enumerate(headers) if h}
 
     required = [
-        "section", "question", "option_a", "option_b", "option_c", "option_d",
-        "correct_option", "marks", "negative_marks",
+        "section", "question", "correct_option", "marks", "negative_marks",
     ]
     missing = [k for k in required if k not in header_map]
     if missing:
@@ -117,7 +129,7 @@ def _parse_import_workbook(raw: bytes):
 
     sections_by_name: dict[str, dict] = {}
     section_order: list[str] = []
-    answers: dict[int, int] = {}
+    answers: dict[int, int | str] = {}
     q_id = 1
     validation_errors: list[str] = []
 
@@ -127,6 +139,9 @@ def _parse_import_workbook(raw: bytes):
             if idx is not None:
                 return idx
         return None
+
+    question_type_col = _first_header_index("question_type", "type")
+    fib_answer_col = _first_header_index("fib_answer", "fill_answer", "answer_text", "correct_answer")
 
     image_columns = {
         "question": _first_header_index("question_image_url", "question_image_urls", "question_image", "image_url", "image_urls"),
@@ -192,27 +207,60 @@ def _parse_import_workbook(raw: bytes):
             validation_errors.append(f"Row {idx}: question text or question_image_url is required.")
             continue
 
+        q_type_raw = r[question_type_col] if question_type_col is not None and question_type_col < len(r) else None
+        question_type = _normalize_question_type(q_type_raw)
+
         options = []
         row_has_option_error = False
-        for key in ("option_a", "option_b", "option_c", "option_d"):
-            value = r[header_map[key]] if header_map[key] < len(r) else None
-            text = "" if value is None else str(value).strip()
-            image_url = row_image_map.get(key, "")
-            if not text and not image_url:
-                validation_errors.append(f"Row {idx}: {key} text or {key}_image_url is required.")
-                row_has_option_error = True
-            if image_url:
-                options.append({"text": text, "image_url": image_url})
-            else:
-                options.append(text)
-        if row_has_option_error:
-            continue
+        if question_type == "FIB":
+            options = ["", "", "", ""]
+        elif question_type == "TOF":
+            # TOF always exports/imports as fixed True/False options.
+            options = ["True", "False", "", ""]
+        else:
+            for key in ("option_a", "option_b", "option_c", "option_d"):
+                col_idx = header_map.get(key)
+                value = r[col_idx] if col_idx is not None and col_idx < len(r) else None
+                text = "" if value is None else str(value).strip()
+                image_url = row_image_map.get(key, "")
+                if not text and not image_url:
+                    validation_errors.append(f"Row {idx}: {key} text or {key}_image_url is required.")
+                    row_has_option_error = True
+                if image_url:
+                    options.append({"text": text, "image_url": image_url})
+                else:
+                    options.append(text)
+            if row_has_option_error:
+                continue
 
         correct_raw = r[header_map["correct_option"]] if header_map["correct_option"] < len(r) else None
-        correct_idx = _normalize_option(correct_raw)
-        if correct_idx is None:
-            validation_errors.append(f"Row {idx}: correct_option must be A-D or 1-4.")
-            continue
+        fib_answer_raw = r[fib_answer_col] if fib_answer_col is not None and fib_answer_col < len(r) else None
+
+        if question_type == "FIB":
+            fib_answer = _normalize_fib_answer(fib_answer_raw)
+            if not fib_answer:
+                validation_errors.append(f"Row {idx}: fib_answer is required for FIB questions.")
+                continue
+            answer_value: int | str = fib_answer
+            correct_idx = None
+        elif question_type == "TOF":
+            correct_idx = _normalize_option(correct_raw)
+            if correct_idx is None:
+                token = str(correct_raw or "").strip().lower()
+                if token in {"true", "t"}:
+                    correct_idx = 0
+                elif token in {"false", "f"}:
+                    correct_idx = 1
+            if correct_idx is None or correct_idx not in {0, 1}:
+                validation_errors.append(f"Row {idx}: correct_option for TOF must be True/False or A/B (1/2).")
+                continue
+            answer_value = int(correct_idx)
+        else:
+            correct_idx = _normalize_option(correct_raw)
+            if correct_idx is None:
+                validation_errors.append(f"Row {idx}: correct_option must be A-D or 1-4.")
+                continue
+            answer_value = int(correct_idx)
 
         marks_raw = r[header_map["marks"]] if header_map["marks"] < len(r) else None
         neg_raw = r[header_map["negative_marks"]] if header_map["negative_marks"] < len(r) else None
@@ -234,8 +282,8 @@ def _parse_import_workbook(raw: bytes):
         question_payload = {
             "question_id": q_id,
             "text": question_text,
+            "question_type": question_type,
             "options": options,
-            "correct_option": correct_idx,
             "marks": marks,
             "negative_marks": negative_marks,
         }
@@ -243,7 +291,7 @@ def _parse_import_workbook(raw: bytes):
             question_payload["image_url"] = question_image_url
 
         sections_by_name[section_name]["questions"].append(question_payload)
-        answers[q_id] = correct_idx
+        answers[q_id] = answer_value
         q_id += 1
 
     sections = [sections_by_name[name] for name in section_order]
@@ -353,7 +401,7 @@ def _extract_option_text_and_image(opt) -> tuple[str, str]:
     return str(opt or ""), ""
 
 
-def _build_export_workbook(questions_data: dict) -> bytes:
+def _build_export_workbook(questions_data: dict, answers_data: dict | None = None) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Questions"
@@ -361,6 +409,7 @@ def _build_export_workbook(questions_data: dict) -> bytes:
     headers = [
         "exam_name",
         "section",
+        "question_type",
         "question",
         "question_image_url",
         "option_a",
@@ -371,6 +420,7 @@ def _build_export_workbook(questions_data: dict) -> bytes:
         "option_c_image_url",
         "option_d",
         "option_d_image_url",
+        "fib_answer",
         "correct_option",
         "marks",
         "negative_marks",
@@ -380,25 +430,45 @@ def _build_export_workbook(questions_data: dict) -> bytes:
     meta = questions_data.get("meta", {}) if isinstance(questions_data, dict) else {}
     exam_name = str(meta.get("exam_name", "") or "")
     sections = questions_data.get("sections", []) if isinstance(questions_data, dict) else []
+    answers_map = answers_data if isinstance(answers_data, dict) else {}
 
     for section in sections:
         section_name = str(section.get("name", "") or "")
         for q in section.get("questions", []):
+            qid = q.get("question_id")
+            q_type = _normalize_question_type(q.get("question_type"))
             options = q.get("options", [])
             option_vals = []
             for idx in range(4):
                 opt = options[idx] if idx < len(options) else ""
                 option_vals.append(_extract_option_text_and_image(opt))
 
-            correct_idx = q.get("correct_option")
-            try:
-                correct_letter = ["A", "B", "C", "D"][int(correct_idx)]
-            except Exception:
+            answer = None
+            if qid is not None:
+                answer = answers_map.get(str(qid))
+                if answer is None:
+                    answer = answers_map.get(qid)
+
+            if q_type == "FIB":
+                fib_answer = str(answer or "")
                 correct_letter = ""
+            else:
+                fib_answer = ""
+                try:
+                    correct_letter = ["A", "B", "C", "D"][int(answer)]
+                except Exception:
+                    correct_letter = ""
+
+            if q_type == "TOF":
+                option_vals[0] = ("True", option_vals[0][1])
+                option_vals[1] = ("False", option_vals[1][1])
+                option_vals[2] = ("", "")
+                option_vals[3] = ("", "")
 
             ws.append([
                 exam_name,
                 section_name,
+                q_type,
                 str(q.get("text", "") or ""),
                 str(q.get("image_url", "") or ""),
                 option_vals[0][0],
@@ -409,6 +479,7 @@ def _build_export_workbook(questions_data: dict) -> bytes:
                 option_vals[2][1],
                 option_vals[3][0],
                 option_vals[3][1],
+                fib_answer,
                 correct_letter,
                 q.get("marks", 0),
                 q.get("negative_marks", 0),
@@ -804,7 +875,7 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
 @router.get("/paper/{paper_id:int}/download-xlsx")
 async def downloadPaperXlsx(paper_id: int, user=Depends(get_current_user)):
     query = db.client.table("QuestionPapers") \
-        .select("id,questions") \
+        .select("id,questions,answers") \
         .eq("id", paper_id)
     if user.get("role") != "HOD":
         query = query.eq("creator_id", user["id"])
@@ -815,10 +886,11 @@ async def downloadPaperXlsx(paper_id: int, user=Depends(get_current_user)):
 
     paper_data = paper_res.data[0]
     questions_data = paper_data.get("questions") or {}
+    answers_data = paper_data.get("answers") or {}
     meta = questions_data.get("meta", {}) if isinstance(questions_data, dict) else {}
     paper_name = str(meta.get("exam_name") or f"Paper #{paper_id}")
 
-    xlsx_bytes = _build_export_workbook(questions_data)
+    xlsx_bytes = _build_export_workbook(questions_data, answers_data)
     return StreamingResponse(
         iter([xlsx_bytes]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
