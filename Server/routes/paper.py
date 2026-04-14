@@ -1,7 +1,9 @@
 from pathlib import Path
 import json
+import re
 from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -22,6 +24,15 @@ from config import DOCX_TEMPLATE_ANCHOR_TEXT, PAPER_DOCX_TEMPLATE_NAME
 router = APIRouter()
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "template"
 PAPER_DOCX_TEMPLATE = TEMPLATE_DIR / PAPER_DOCX_TEMPLATE_NAME
+
+
+def _download_content_disposition(filename: str) -> str:
+    raw = str(filename or "download").strip().replace("\r", " ").replace("\n", " ")
+    if not raw:
+        raw = "download"
+    safe_ascii = re.sub(r"[^A-Za-z0-9._-]+", "_", raw).strip("._") or "download"
+    encoded = quote(raw, safe="")
+    return f"attachment; filename=\"{safe_ascii}\"; filename*=UTF-8''{encoded}"
 
 
 def _now_iso() -> str:
@@ -536,7 +547,7 @@ async def downloadTemplate(template_name: str, user=Depends(get_current_user)):
     return StreamingResponse(
         iter([data]),
         media_type=media,
-        headers={"Content-Disposition": f"attachment; filename={target.name}"},
+        headers={"Content-Disposition": _download_content_disposition(target.name)},
     )
 
 
@@ -715,8 +726,8 @@ async def clonePaper(paper_id: int, user=Depends(get_current_user)):
 
 
 ALLOWED_IMAGE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
-QUESTION_IMAGE_WIDTH = 1  # inches
-OPTION_IMAGE_WIDTH = 1   # inches
+QUESTION_IMAGE_WIDTH = 2.6  # inches
+OPTION_IMAGE_WIDTH = 2.0   # inches
 
 @router.post("/paper/upload-image")
 async def uploadImage(file: UploadFile = File(...), user=Depends(get_current_user)):
@@ -884,7 +895,7 @@ async def downloadPaperDoc(paper_id: int, user=Depends(get_current_user)):
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f"attachment; filename={paper_name}.docx"}
+        headers={"Content-Disposition": _download_content_disposition(f"{paper_name}.docx")}
     )
 
 
@@ -910,5 +921,5 @@ async def downloadPaperXlsx(paper_id: int, user=Depends(get_current_user)):
     return StreamingResponse(
         iter([xlsx_bytes]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={paper_name}.xlsx"},
+        headers={"Content-Disposition": _download_content_disposition(f"{paper_name}.xlsx")},
     )
