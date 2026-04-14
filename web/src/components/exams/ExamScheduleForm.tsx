@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { getCookie } from "cookies-next";
+import { useRouter } from "next/navigation";
 import { CalendarClock, FileText, Loader2, CheckCircle2, Plus, Clock } from "lucide-react";
 import Link from "next/link";
 import { API } from "@/lib/config";
@@ -48,6 +49,23 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
+interface ExamFormInitialData {
+  name: string;
+  questionpaper_id: number;
+  start: string;
+  end: string;
+  max_warnings?: number;
+  allowed_sections?: string[];
+  join_window?: number | null;
+  release_after_exam?: boolean;
+}
+
+function toLocalInput(iso: string): string {
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return "";
+  return new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 // ── Field label ───────────────────────────────────────────────────────────────
 
 function Label({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
@@ -65,16 +83,17 @@ function FieldError({ message }: { message?: string }) {
 
 // ── Success state ─────────────────────────────────────────────────────────────
 
-function SuccessState({ name, examsBasePath }: { name: string; examsBasePath: string }) {
+function SuccessState({ name, examsBasePath, mode }: { name: string; examsBasePath: string; mode: "create" | "edit" }) {
+  const isEdit = mode === "edit";
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-6">
       <div className="rounded-full bg-emerald-950/40 p-4 border border-emerald-800/40">
         <CheckCircle2 className="w-7 h-7 text-emerald-400" />
       </div>
       <div className="space-y-1.5">
-        <h2 className="text-lg font-semibold text-zinc-100">Exam scheduled</h2>
+        <h2 className="text-lg font-semibold text-zinc-100">{isEdit ? "Exam updated" : "Exam scheduled"}</h2>
         <p className="text-sm text-zinc-500">
-          <span className="text-zinc-300 font-medium">{name}</span> is ready to go.
+          <span className="text-zinc-300 font-medium">{name}</span> {isEdit ? "was updated successfully." : "is ready to go."}
         </p>
       </div>
       <div className="flex gap-3">
@@ -84,13 +103,15 @@ function SuccessState({ name, examsBasePath }: { name: string; examsBasePath: st
         >
           View all exams
         </Link>
-        <Link
-          href={`${examsBasePath}/new`}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-yellow-400 hover:bg-yellow-300 text-zinc-900 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Schedule another
-        </Link>
+        {!isEdit && (
+          <Link
+            href={`${examsBasePath}/new`}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-yellow-400 hover:bg-yellow-300 text-zinc-900 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Schedule another
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -98,7 +119,20 @@ function SuccessState({ name, examsBasePath }: { name: string; examsBasePath: st
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function ExamScheduleForm({ examsBasePath = "/exams", papersBasePath = "/papers" }: { examsBasePath?: string; papersBasePath?: string } = {}) {
+export default function ExamScheduleForm({
+  examsBasePath = "/exams",
+  papersBasePath = "/papers",
+  mode = "create",
+  examId,
+  initialData,
+}: {
+  examsBasePath?: string;
+  papersBasePath?: string;
+  mode?: "create" | "edit";
+  examId?: number;
+  initialData?: ExamFormInitialData;
+} = {}) {
+  const router = useRouter();
   const [papers, setPapers] = useState<Paper[]>([]);
   const [papersLoading, setPapersLoading] = useState(true);
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
@@ -124,11 +158,18 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      duration_minutes: 120, // Default to 2 hours
-      max_warnings: 3,
-      audience_mode: "all",
-      allowed_sections: [],
-      release_after_exam: false,
+      name: initialData?.name ?? "",
+      questionpaper_id: initialData?.questionpaper_id ?? 0,
+      start: initialData?.start ? toLocalInput(initialData.start) : "",
+      end: initialData?.end ? toLocalInput(initialData.end) : "",
+      duration_minutes: initialData?.start && initialData?.end
+        ? Math.max(1, Math.round((new Date(initialData.end).getTime() - new Date(initialData.start).getTime()) / 60000))
+        : 120,
+      max_warnings: initialData?.max_warnings ?? 3,
+      audience_mode: (initialData?.allowed_sections?.length ?? 0) > 0 ? "selected" : "all",
+      allowed_sections: initialData?.allowed_sections ?? [],
+      release_after_exam: initialData?.release_after_exam ?? false,
+      join_window: initialData?.join_window ?? undefined,
     }
   });
 
@@ -174,8 +215,10 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
 
     let res: Response | null = null;
     try {
-      res = await fetch(`${API}/exam/create`, {
-        method: "POST",
+      const endpoint = mode === "edit" && examId ? `${API}/exam/${examId}` : `${API}/exam/create`;
+      const method = mode === "edit" ? "PUT" : "POST";
+      res = await fetch(endpoint, {
+        method,
         headers: { "Content-Type": "application/json", "x-session-token": token },
         body: JSON.stringify({
           name: data.name,
@@ -196,10 +239,13 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
     }
 
     if (res.ok) {
+      if (mode === "edit") {
+        router.refresh();
+      }
       setCreated(data.name);
     } else {
       const body = await res.json().catch(() => ({}));
-      setServerError(body.detail ?? "Failed to create exam.");
+      setServerError(body.detail ?? (mode === "edit" ? "Failed to update exam." : "Failed to create exam."));
     }
   };
 
@@ -213,7 +259,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
     setValue("start", localDatetime);
   };
 
-  if (created) return <SuccessState name={created} examsBasePath={examsBasePath} />;
+  if (created) return <SuccessState name={created} examsBasePath={examsBasePath} mode={mode} />;
 
   const inputBase =
     "w-full rounded-lg border bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:ring-2 focus:ring-yellow-500/70 focus:border-yellow-500";
@@ -228,11 +274,11 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-yellow-400 mb-1">
             <CalendarClock className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase tracking-wider">New exam</span>
+            <span className="text-xs font-medium uppercase tracking-wider">{mode === "edit" ? "Modify exam" : "New exam"}</span>
           </div>
-          <h1 className="text-xl font-semibold text-zinc-100">Schedule an exam</h1>
+          <h1 className="text-xl font-semibold text-zinc-100">{mode === "edit" ? "Modify exam" : "Schedule an exam"}</h1>
           <p className="text-sm text-zinc-500">
-            Select a question paper and set the time window.
+            {mode === "edit" ? "Update exam details before it goes live." : "Select a question paper and set the time window."}
           </p>
         </div>
 
@@ -479,7 +525,7 @@ export default function ExamScheduleForm({ examsBasePath = "/exams", papersBaseP
               className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-medium px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isSubmitting ? "Scheduling…" : "Schedule exam"}
+              {isSubmitting ? (mode === "edit" ? "Updating..." : "Scheduling...") : (mode === "edit" ? "Update exam" : "Schedule exam")}
             </button>
           </div>
 

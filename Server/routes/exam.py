@@ -365,9 +365,9 @@ async def _get_release_state_by_exam_ids(exam_ids: list[int]) -> dict[int, dict]
         return {}
 
     logs_res = await db.client.table("ExamLogs") \
-        .select("exam_id,event") \
+        .select("exam_id,event,created_at") \
         .in_("exam_id", exam_ids) \
-        .in_("event", ["responses_auto_release_enabled", "responses_released"]) \
+        .in_("event", ["responses_auto_release_enabled", "responses_auto_release_disabled", "responses_released"]) \
         .execute()
 
     state = {
@@ -378,13 +378,16 @@ async def _get_release_state_by_exam_ids(exam_ids: list[int]) -> dict[int, dict]
         for exam_id in exam_ids
     }
 
-    for row in logs_res.data or []:
+    rows = sorted(logs_res.data or [], key=lambda row: str(row.get("created_at") or ""))
+    for row in rows:
         exam_id = row.get("exam_id")
         event = row.get("event")
         if not isinstance(exam_id, int) or exam_id not in state:
             continue
         if event == "responses_auto_release_enabled":
             state[exam_id]["auto_release"] = True
+        elif event == "responses_auto_release_disabled":
+            state[exam_id]["auto_release"] = False
         elif event == "responses_released":
             state[exam_id]["released_manually"] = True
 
@@ -688,6 +691,86 @@ async def createExam(exam: Exam, user=Depends(get_current_user)):
 
     await _invalidate_exam_cache(exam_id)
     return {"msg": "Exam created", "id": exam_id}
+
+
+@router.get("/exam/{exam_id}/detail")
+async def getExam(exam_id: int, user=Depends(get_current_user)):
+    exam = await _get_exam_core(exam_id)
+    if not exam or (user.get("role") != "HOD" and exam.get("creator_id") != user["id"]):
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    release_state_map = await _get_release_state_by_exam_ids([exam_id])
+    release_state = release_state_map.get(exam_id, {"auto_release": False, "released_manually": False})
+
+    can_manage = exam.get("creator_id") == user["id"]
+    start_dt = datetime.fromisoformat(str(exam.get("start", "")).replace("Z", "+00:00"))
+    can_modify = can_manage and datetime.now(timezone.utc) < start_dt
+
+    return {
+        "exam": {
+            **exam,
+            "can_manage": can_manage,
+            "can_modify": can_modify,
+            "release_after_exam": bool(release_state.get("auto_release")),
+            "responses_released": _is_exam_response_released(exam, release_state),
+        }
+    }
+
+
+@router.put("/exam/{exam_id}")
+async def updateExam(exam_id: int, exam: Exam, user=Depends(get_current_user)):
+    existing = await _get_exam_core(exam_id)
+    if not existing or existing.get("creator_id") != user["id"]:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Exam not found.")
+
+    now = datetime.now(timezone.utc)
+    start_dt = datetime.fromisoformat(str(existing.get("start", "")).replace("Z", "+00:00"))
+    if now >= start_dt:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Only upcoming exams can be modified.")
+
+    data = exam.model_dump(exclude={"id", "created_at", "creator_id"})
+    data["allowed_sections"] = _normalize_allowed_sections(data.get("allowed_sections"))
+    data["start"] = data["start"].isoformat()
+    data["end"] = data["end"].isoformat()
+    release_after_exam = bool(data.pop("release_after_exam", False))
+
+    try:
+        await db.client.table("Exams").update(data).eq("id", exam_id).execute()
+    except APIError as err:
+        if _is_missing_column_error(err, "allowed_sections"):
+            legacy_data = {k: v for k, v in data.items() if k != "allowed_sections"}
+            try:
+                await db.client.table("Exams").update(legacy_data).eq("id", exam_id).execute()
+            except APIError as err2:
+                if _is_missing_column_error(err2, "max_warnings"):
+                    legacy_data = {k: v for k, v in legacy_data.items() if k != "max_warnings"}
+                    await db.client.table("Exams").update(legacy_data).eq("id", exam_id).execute()
+                else:
+                    raise
+        elif _is_missing_column_error(err, "max_warnings"):
+            legacy_data = {k: v for k, v in data.items() if k != "max_warnings"}
+            await db.client.table("Exams").update(legacy_data).eq("id", exam_id).execute()
+        else:
+            raise
+
+    release_state_map = await _get_release_state_by_exam_ids([exam_id])
+    release_state = release_state_map.get(exam_id, {"auto_release": False, "released_manually": False})
+    auto_release_enabled = bool(release_state.get("auto_release"))
+    if release_after_exam and not auto_release_enabled:
+        await db.client.table("ExamLogs").insert({
+            "exam_id": exam_id,
+            "user_id": user["id"],
+            "event": "responses_auto_release_enabled",
+        }).execute()
+    elif not release_after_exam and auto_release_enabled:
+        await db.client.table("ExamLogs").insert({
+            "exam_id": exam_id,
+            "user_id": user["id"],
+            "event": "responses_auto_release_disabled",
+        }).execute()
+
+    await _invalidate_exam_cache(exam_id)
+    return {"msg": "Exam updated.", "id": exam_id}
 
 
 @router.delete("/exam/{exam_id}")
