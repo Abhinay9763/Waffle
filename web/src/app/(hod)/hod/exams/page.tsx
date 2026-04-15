@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCookie } from "cookies-next";
 import Link from "next/link";
-import { CalendarDays, ChevronRight, Loader2, Plus, Radio, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronRight, Loader2, Pencil, Plus, Radio, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { API } from "@/lib/config";
 
@@ -58,6 +58,7 @@ function ExamRow({ exam, onDelete, deleting, onRelease, releasing }: {
 }) {
   const status = statusOf(exam.start, exam.end);
   const canReleaseNow = status === "ended" && exam.can_manage && !exam.responses_released;
+  const canModify = status === "upcoming" && exam.can_manage;
 
   return (
     <div className="flex flex-col items-stretch gap-3 px-4 py-3.5 hover:bg-zinc-800/30 transition-colors sm:flex-row sm:items-center sm:gap-4">
@@ -81,6 +82,16 @@ function ExamRow({ exam, onDelete, deleting, onRelease, releasing }: {
         {STATUS_LABEL[status]}
       </span>
       <div className="flex flex-wrap items-center gap-2 sm:gap-2 sm:ml-auto">
+      {canModify && (
+        <Link
+          href={`/hod/exams/${exam.id}/edit`}
+          className="shrink-0 flex items-center gap-1 text-xs text-zinc-400 hover:text-sky-300 border border-zinc-700 hover:border-sky-700 px-2.5 py-1 rounded-lg transition-colors"
+          title="Modify exam"
+        >
+          <Pencil className="w-3 h-3" />
+          Modify
+        </Link>
+      )}
       {status === "live" && (
         <Link
           href={`/hod/exams/${exam.id}/live`}
