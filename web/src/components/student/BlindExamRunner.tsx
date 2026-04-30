@@ -1146,8 +1146,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
               <button
                 type="button"
                 onClick={() => setShowLeavePrompt(false)}
-                disabled={uiLockedByBlind}
-                tabIndex={uiLockedByBlind ? -1 : 0}
+                disabled={submitting}
+                tabIndex={submitting ? -1 : 0}
                 className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-300 hover:border-zinc-500"
               >
                 Continue exam
@@ -1155,8 +1155,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
               <button
                 type="button"
                 onClick={confirmLeaveAndSubmit}
-                disabled={uiLockedByBlind}
-                tabIndex={uiLockedByBlind ? -1 : 0}
+                disabled={submitting}
+                tabIndex={submitting ? -1 : 0}
                 className="rounded-lg bg-yellow-400 px-3 py-2 text-xs font-semibold text-zinc-900 hover:bg-yellow-300"
               >
                 Submit and leave
@@ -1176,8 +1176,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
               <button
                 type="button"
                 onClick={() => setShowSubmitPrompt(false)}
-                disabled={uiLockedByBlind}
-                tabIndex={uiLockedByBlind ? -1 : 0}
+                disabled={submitting}
+                tabIndex={submitting ? -1 : 0}
                 className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-300 hover:border-zinc-500"
               >
                 Continue exam
@@ -1188,8 +1188,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
                   setShowSubmitPrompt(false);
                   void submitExam("manual");
                 }}
-                disabled={uiLockedByBlind}
-                tabIndex={uiLockedByBlind ? -1 : 0}
+                disabled={submitting}
+                tabIndex={submitting ? -1 : 0}
                 className="rounded-lg bg-yellow-400 px-3 py-2 text-xs font-semibold text-zinc-900 hover:bg-yellow-300"
               >
                 Submit now
@@ -1263,8 +1263,8 @@ export default function ExamRunner({ exam }: { exam: ExamStructure }) {
           <button
             type="button"
             onClick={onSubmitClick}
-            disabled={submitting || uiLockedByBlind}
-            tabIndex={uiLockedByBlind ? -1 : 0}
+            disabled={submitting}
+            tabIndex={submitting ? -1 : 0}
             className="inline-flex items-center gap-1.5 rounded-lg bg-yellow-400 px-3 py-1.5 text-xs font-semibold text-zinc-900 hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
